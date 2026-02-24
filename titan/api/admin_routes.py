@@ -246,7 +246,7 @@ async def metrics_summary() -> MetricsSummaryResponse:
         import redis
 
         r = redis.from_url(os.getenv("TITAN_REDIS_URL", "redis://localhost:6379"))
-        redis_connected = r.ping()
+        redis_connected = bool(r.ping())
     except Exception:
         pass
 
@@ -674,10 +674,10 @@ async def flush_cache(
             keys_deleted = "all"
         else:
             # Pattern-based deletion
-            keys = r.keys(pattern)
-            if keys:
-                r.delete(*keys)
-            keys_deleted = len(keys)
+            matched_keys = list(r.keys(pattern))  # type: ignore[arg-type]
+            if matched_keys:
+                r.delete(*matched_keys)
+            keys_deleted = len(matched_keys)
 
         logger.info(f"Admin flushed cache: pattern={pattern}, deleted={keys_deleted}")
 

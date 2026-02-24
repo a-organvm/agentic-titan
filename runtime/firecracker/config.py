@@ -122,7 +122,7 @@ class FirecrackerConfig:
 
     def to_drive_config(self, drive_id: str = "rootfs") -> dict[str, Any]:
         """Convert to Firecracker drive API format."""
-        config = {
+        config: dict[str, Any] = {
             "drive_id": drive_id,
             "path_on_host": self.rootfs_path,
             "is_root_device": True,

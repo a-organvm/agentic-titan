@@ -174,10 +174,10 @@ class LLMAdapter(ABC):
 
         # Apply sanitizer
         if self._sanitizer:
-            result = self._sanitizer.sanitize(content)
-            if result.was_modified:
-                logger.debug(f"Content sanitized: {result.changes_made}")
-            content = result.sanitized
+            sanitized = self._sanitizer.sanitize(content)
+            if sanitized.was_modified:
+                logger.debug(f"Content sanitized: {sanitized.changes_made}")
+            content = sanitized.sanitized
 
         return content
 
@@ -229,7 +229,7 @@ class LLMAdapter(ABC):
         Yields:
             Response tokens
         """
-        pass
+        yield ""  # pragma: no cover — abstract, makes this a proper AsyncIterator
 
     @abstractmethod
     async def embed(self, text: str) -> list[float]:
@@ -387,7 +387,8 @@ class OllamaAdapter(LLMAdapter):
             response.raise_for_status()
             data = response.json()
 
-        return data["embedding"]
+        result: list[float] = data["embedding"]
+        return result
 
     def supports_tools(self) -> bool:
         # Most Ollama models don't support native tool calling
@@ -566,7 +567,7 @@ class AnthropicAdapter(LLMAdapter):
 
         async with client.messages.stream(
             model=self.config.model,
-            messages=anthropic_messages,
+            messages=anthropic_messages,  # type: ignore[arg-type]
             system=system or "",
             max_tokens=max_tokens or self.config.max_tokens,
             temperature=temperature or self.config.temperature,
@@ -631,10 +632,10 @@ class OpenAIAdapter(LLMAdapter):
 
         response = await client.chat.completions.create(
             model=self.config.model,
-            messages=openai_messages,
+            messages=openai_messages,  # type: ignore[arg-type]
             max_tokens=max_tokens or self.config.max_tokens,
             temperature=temperature or self.config.temperature,
-            tools=openai_tools,
+            tools=openai_tools,  # type: ignore[arg-type]
         )
 
         choice = response.choices[0]
@@ -643,13 +644,14 @@ class OpenAIAdapter(LLMAdapter):
 
         if choice.message.tool_calls:
             for tc in choice.message.tool_calls:
-                tool_calls.append(
-                    {
-                        "id": tc.id,
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    }
-                )
+                if hasattr(tc, "function"):
+                    tool_calls.append(
+                        {
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        }
+                    )
 
         return LLMResponse(
             content=content,
@@ -686,13 +688,13 @@ class OpenAIAdapter(LLMAdapter):
 
         stream = await client.chat.completions.create(
             model=self.config.model,
-            messages=openai_messages,
+            messages=openai_messages,  # type: ignore[arg-type]
             max_tokens=max_tokens or self.config.max_tokens,
             temperature=temperature or self.config.temperature,
             stream=True,
         )
 
-        async for chunk in stream:
+        async for chunk in stream:  # type: ignore[union-attr]
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 

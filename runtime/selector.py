@@ -588,18 +588,19 @@ class RuntimeSelector:
 
     async def health_check(self) -> dict[str, Any]:
         """Check health of all runtimes."""
-        results = {
+        runtimes_health: dict[str, Any] = {}
+        results: dict[str, Any] = {
             "strategy": self.strategy.value,
             "initialized": self._initialized,
-            "runtimes": {},
+            "runtimes": runtimes_health,
         }
 
         for runtime_type, runtime in self._runtimes.items():
             try:
                 health = await runtime.health_check()
-                results["runtimes"][runtime_type.value] = health
+                runtimes_health[runtime_type.value] = health
             except Exception as e:
-                results["runtimes"][runtime_type.value] = {
+                runtimes_health[runtime_type.value] = {
                     "error": str(e),
                     "available": False,
                 }

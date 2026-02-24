@@ -94,7 +94,7 @@ class ToolExecutor:
 
         Handles both Anthropic and OpenAI formats.
         """
-        parsed = []
+        parsed: list[ToolCall] = []
 
         for tc in tool_calls:
             # Anthropic format: {id, name, arguments}
@@ -264,9 +264,9 @@ class ToolExecutor:
             tasks = [self.execute_one(call) for call in calls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            executions = []
+            executions: list[ToolExecution] = []
             for i, result in enumerate(results):
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     executions.append(
                         ToolExecution(
                             call=calls[i],

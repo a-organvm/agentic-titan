@@ -10,6 +10,7 @@ Tools follow a simple protocol:
 
 from __future__ import annotations
 
+import builtins
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -208,18 +209,18 @@ class ToolRegistry:
         """List all registered tools."""
         return list(self._tools.values())
 
-    def list_names(self) -> list[str]:
+    def list_names(self) -> builtins.list[str]:
         """List all tool names."""
-        return list(self._tools.keys())
+        return builtins.list(self._tools.keys())
 
-    def get_schemas(self, format: str = "anthropic") -> list[dict[str, Any]]:
+    def get_schemas(self, format: str = "anthropic") -> builtins.list[dict[str, Any]]:
         """Get schemas for all tools."""
         if format == "openai":
             return [t.to_openai_schema() for t in self._tools.values()]
         else:
             return [t.to_anthropic_schema() for t in self._tools.values()]
 
-    def filter_by_capabilities(self, capabilities: list[str]) -> list[Tool]:
+    def filter_by_capabilities(self, capabilities: builtins.list[str]) -> builtins.list[Tool]:
         """Get tools that match capabilities."""
         # Simple name-based matching for now
         return [

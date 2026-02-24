@@ -98,7 +98,7 @@ async def check_infrastructure() -> dict[str, bool]:
             import redis.asyncio as redis_lib
 
             r = redis_lib.from_url("redis://localhost:6379")
-            await r.ping()
+            await r.ping()  # type: ignore[misc]
             checks["redis"] = True
             await r.close()
         except Exception:

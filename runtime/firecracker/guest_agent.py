@@ -467,7 +467,7 @@ class GuestAgentProtocol:
 
         # Validate magic
         if header[:4] != MAGIC:
-            raise ValueError(f"Invalid magic: {header[:4]}")
+            raise ValueError(f"Invalid magic: {header[:4]!r}")
 
         # Parse header
         header[4]

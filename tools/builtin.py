@@ -167,7 +167,7 @@ class ReadFileTool(Tool):
             ),
         ]
 
-    async def execute(self, path: str, max_lines: int = 500) -> ToolResult:
+    async def execute(self, path: str, max_lines: int = 500) -> ToolResult:  # type: ignore[override]
         try:
             file_path = Path(path).expanduser().resolve()
 
@@ -236,7 +236,7 @@ class WriteFileTool(Tool):
             ),
         ]
 
-    async def execute(
+    async def execute(  # type: ignore[override]
         self,
         path: str,
         content: str,
@@ -297,7 +297,7 @@ class ListDirectoryTool(Tool):
             ),
         ]
 
-    async def execute(
+    async def execute(  # type: ignore[override]
         self,
         path: str,
         recursive: bool = False,
@@ -404,7 +404,7 @@ class WebSearchTool(Tool):
             ),
         ]
 
-    async def execute(
+    async def execute(  # type: ignore[override]
         self,
         query: str,
         num_results: int = 5,
@@ -670,7 +670,7 @@ class WebFetchTool(Tool):
             ),
         ]
 
-    async def execute(self, url: str, max_length: int = 10000) -> ToolResult:
+    async def execute(self, url: str, max_length: int = 10000) -> ToolResult:  # type: ignore[override]
         try:
             import httpx
 
@@ -774,7 +774,7 @@ class ShellCommandTool(Tool):
             ),
         ]
 
-    async def execute(self, command: str, timeout: int = 30) -> ToolResult:
+    async def execute(self, command: str, timeout: int = 30) -> ToolResult:  # type: ignore[override]
         # Extract the base command
         base_command = command.split()[0] if command.split() else ""
 
@@ -864,7 +864,7 @@ class CalculatorTool(Tool):
             ),
         ]
 
-    async def execute(self, expression: str) -> ToolResult:
+    async def execute(self, expression: str) -> ToolResult:  # type: ignore[override]
         import ast
         import math
         import operator
@@ -904,25 +904,25 @@ class CalculatorTool(Tool):
         def safe_eval(node: ast.AST) -> float:
             """Safely evaluate an AST node."""
             if isinstance(node, ast.Constant):  # Numbers
-                return node.value
+                return float(node.value)  # type: ignore[arg-type]
             elif isinstance(node, ast.Name):  # Named constants
                 if node.id in consts:
                     return consts[node.id]
                 raise ValueError(f"Unknown constant: {node.id}")
             elif isinstance(node, ast.BinOp):  # Binary operations
-                op = ops.get(type(node.op))
-                if op is None:
+                op_func = ops.get(type(node.op))
+                if op_func is None:
                     raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
-                return op(safe_eval(node.left), safe_eval(node.right))
+                return float(op_func(safe_eval(node.left), safe_eval(node.right)))  # type: ignore[operator]
             elif isinstance(node, ast.UnaryOp):  # Unary operations
-                op = ops.get(type(node.op))
-                if op is None:
+                op_func = ops.get(type(node.op))
+                if op_func is None:
                     raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
-                return op(safe_eval(node.operand))
+                return float(op_func(safe_eval(node.operand)))  # type: ignore[operator]
             elif isinstance(node, ast.Call):  # Function calls
                 if isinstance(node.func, ast.Name) and node.func.id in funcs:
                     args = [safe_eval(arg) for arg in node.args]
-                    return funcs[node.func.id](*args)
+                    return float(funcs[node.func.id](*args))  # type: ignore[operator]
                 raise ValueError(f"Unknown function: {getattr(node.func, 'id', 'unknown')}")
             else:
                 raise ValueError(f"Unsupported expression type: {type(node).__name__}")
@@ -972,7 +972,7 @@ class JsonTool(Tool):
             ),
         ]
 
-    async def execute(self, action: str, data: str) -> ToolResult:
+    async def execute(self, action: str, data: str) -> ToolResult:  # type: ignore[override]
         try:
             if action == "parse":
                 result = json.loads(data)

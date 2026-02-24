@@ -199,7 +199,7 @@ class XLSXTool(Tool):
                     headers = [str(h) if h else f"Col{i + 1}" for i, h in enumerate(first_row)]
 
                 # Sample some data types
-                col_types: dict[int, set] = {}
+                col_types: dict[int, set[str]] = {}
                 sample_rows = min(10, total_rows)
 
                 for row in ws.iter_rows(min_row=2, max_row=sample_rows + 1, values_only=True):

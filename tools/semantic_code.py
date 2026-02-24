@@ -119,7 +119,7 @@ class Symbol:
 
     def to_dict(self, include_children: bool = True) -> dict[str, Any]:
         """Convert to dictionary."""
-        result = {
+        result: dict[str, Any] = {
             "name": self.name,
             "kind": self.kind.name,
             "kind_value": self.kind.value,

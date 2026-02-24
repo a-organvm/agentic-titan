@@ -128,7 +128,7 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     if mag_a == 0 or mag_b == 0:
         return 0.0
 
-    return dot / (mag_a * mag_b)
+    return float(dot / (mag_a * mag_b))
 
 
 # ============================================================================

@@ -282,8 +282,15 @@ class MicroVMManager:
             from runtime.firecracker.guest_agent import GuestAgentProtocol
 
             agent = GuestAgentProtocol()
-            result = await agent.execute_command_via_api(vm, command, timeout)
+            cmd_result = await agent.execute_command_via_api(vm, command, timeout)
 
+            result = ExecutionResult(
+                exit_code=cmd_result.exit_code,
+                stdout=cmd_result.stdout,
+                stderr=cmd_result.stderr,
+                timed_out=cmd_result.timed_out,
+                error=cmd_result.error,
+            )
             result.duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
             return result
 
@@ -461,7 +468,8 @@ class MicroVMManager:
                             text = await response.text()
                             raise RuntimeError(f"API error {response.status}: {text}")
                         if response.content_length and response.content_length > 0:
-                            return await response.json()
+                            result: dict[str, Any] = await response.json()
+                            return result
                         return {}
 
         except ImportError:
@@ -499,7 +507,8 @@ class MicroVMManager:
             raise RuntimeError(f"curl failed: {stderr.decode()}")
 
         if stdout:
-            return json.loads(stdout.decode())
+            result: dict[str, Any] = json.loads(stdout.decode())
+            return result
         return {}
 
     async def _api_get(
@@ -515,7 +524,8 @@ class MicroVMManager:
                 async with aiohttp.ClientSession(connector=connector) as session:
                     url = f"http://localhost{endpoint}"
                     async with session.get(url) as response:
-                        return await response.json()
+                        result: dict[str, Any] = await response.json()
+                        return result
 
         except ImportError:
             # Fallback to curl

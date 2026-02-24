@@ -160,7 +160,7 @@ class OpenFaaSRuntime(Runtime):
         serverless_config = runtimes.get("serverless", {})
 
         if "handler" in serverless_config:
-            return serverless_config["handler"]
+            return str(serverless_config["handler"])
 
         # Check runtime config
         if self.config.function_name:
@@ -181,7 +181,7 @@ class OpenFaaSRuntime(Runtime):
             return
 
         max_wait = self.config.execution_timeout
-        elapsed = 0
+        elapsed: float = 0
         poll_interval = 2.0
 
         while process.state == ProcessState.RUNNING and elapsed < max_wait:

@@ -206,7 +206,7 @@ class DockerRuntime(Runtime):
         container_config = runtimes.get("container", {})
 
         if "image" in container_config:
-            return container_config["image"]
+            return str(container_config["image"])
 
         # Check runtime config
         if self.config.image:

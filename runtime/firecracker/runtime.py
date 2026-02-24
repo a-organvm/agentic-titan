@@ -125,6 +125,8 @@ class FirecrackerRuntime(Runtime):
         )
         self._register_process(process)
 
+        assert self._vm_manager is not None, "Runtime not initialized"
+
         try:
             # Get or create VM
             vm = await self._vm_manager.get_or_create_from_pool(self._fc_config)
@@ -199,6 +201,7 @@ class FirecrackerRuntime(Runtime):
             return []
 
         # Try to read logs from VM
+        assert self._vm_manager is not None, "Runtime not initialized"
         try:
             result = await self._vm_manager.execute(
                 vm,
@@ -234,6 +237,7 @@ class FirecrackerRuntime(Runtime):
             await self.initialize()
 
         timeout = timeout or self._fc_config.timeout_seconds
+        assert self._vm_manager is not None, "Runtime not initialized"
 
         # Get a VM from pool
         vm = await self._vm_manager.get_or_create_from_pool(self._fc_config)
@@ -285,6 +289,7 @@ class FirecrackerRuntime(Runtime):
             f.write(agent_code)
             temp_path = f.name
 
+        assert self._vm_manager is not None, "Runtime not initialized"
         try:
             await self._vm_manager.copy_to_vm(vm, temp_path, "/opt/agent/run.py")
         finally:

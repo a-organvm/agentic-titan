@@ -67,7 +67,6 @@ jobs:
           fi
 
       - name: Type check with mypy
-        continue-on-error: true
         run: |
           if command -v mypy &> /dev/null; then
             mypy . --ignore-missing-imports || echo "::warning::Mypy found type issues"

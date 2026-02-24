@@ -22,7 +22,7 @@ http_bearer = HTTPBearer(auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-class AuthenticationError(HTTPException):
+class AuthenticationError(HTTPException):  # type: ignore[misc]
     """Authentication failed."""
 
     def __init__(self, detail: str = "Could not validate credentials"):
@@ -33,7 +33,7 @@ class AuthenticationError(HTTPException):
         )
 
 
-class AuthorizationError(HTTPException):
+class AuthorizationError(HTTPException):  # type: ignore[misc]
     """Authorization failed (insufficient permissions)."""
 
     def __init__(self, detail: str = "Insufficient permissions"):
@@ -259,7 +259,7 @@ def scope_required(
     return scope_checker
 
 
-class RateLimitExceeded(HTTPException):
+class RateLimitExceeded(HTTPException):  # type: ignore[misc]
     """Rate limit exceeded."""
 
     def __init__(self, retry_after: int = 60):
