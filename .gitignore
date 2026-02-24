@@ -59,8 +59,13 @@ dmypy.json
 # Vendor - External reference repositories (cloned for integration)
 vendor/
 
+# Local scratch / staging
+_local/
+verify_bridge.py
+
 # OS
 .DS_Store
+.dbxignore
 Thumbs.db
 
 # Logs

@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from mcp.server import (
+from titan_mcp.server import (
     AgentManager,
     MCPRequest,
     TitanMCPServer,

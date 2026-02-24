@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp.prompts import (
+from titan_mcp.prompts import (
     CREATIVE_INQUIRY_PROMPT,
     EXPANSIVE_INQUIRY_PROMPT,
     MODEL_COMPARISON_PROMPT,

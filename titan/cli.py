@@ -1226,7 +1226,7 @@ def mcp(
         run  - Start the MCP server on stdio
         test - Run a quick self-test
     """
-    from mcp.server import create_server, run_server
+    from titan_mcp.server import create_server, run_server
 
     if action == "run":
         say(ORCHESTRATOR, "Starting Titan MCP Server...")
@@ -1253,7 +1253,7 @@ def mcp(
             server = create_server()
 
             # Test initialize
-            from mcp.server import MCPRequest
+            from titan_mcp.server import MCPRequest
 
             init_req = MCPRequest(
                 jsonrpc="2.0",

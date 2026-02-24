@@ -1,21 +1,28 @@
 ## Summary
 
-- [ ] Describe the main change in 2-4 bullets.
+<!-- What does this PR do? Why is it needed? -->
 
-## Quality Gate Checklist
+## Changes
 
-- [ ] I ran scoped lint checks for core boundary files.
-- [ ] I updated `.ci/core_import_boundary_files.txt` if I touched core boundary
-      files.
-- [ ] I verified import-boundary tests still pass.
-- [ ] I added/updated tests for behavior changes.
+<!-- List the key changes made in this PR -->
 
-## Core Boundary Impact
+-
 
-- [ ] No core import boundary impact.
-- [ ] Core import boundary changed and manifest updated accordingly.
+## Related Issues
 
-## Follow-ups
+<!-- Link related issues: Fixes #123, Relates to #456 -->
 
-- [ ] None.
-- [ ] Follow-up issue(s) linked:
+## Testing
+
+<!-- How did you test these changes? -->
+
+- [ ] Existing tests pass
+- [ ] New tests added (if applicable)
+- [ ] Manual testing performed
+
+## Checklist
+
+- [ ] Code follows the project's style guidelines
+- [ ] Self-review completed
+- [ ] Documentation updated (if applicable)
+- [ ] No secrets or credentials included

@@ -8,7 +8,7 @@ Allows external tools (like Claude Code) to:
 - Get agent results
 """
 
-from mcp.server import TitanMCPServer, create_server, run_server
+from titan_mcp.server import TitanMCPServer, create_server, run_server
 
 __all__ = [
     "TitanMCPServer",

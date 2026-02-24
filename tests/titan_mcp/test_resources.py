@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp.resources import (
+from titan_mcp.resources import (
     LEARNING_STATS_RESOURCE,
     MODEL_SIGNATURES_RESOURCE,
     MCPResourceDefinition,

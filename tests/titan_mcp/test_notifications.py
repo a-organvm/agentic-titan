@@ -7,7 +7,7 @@ from datetime import datetime
 
 import pytest
 
-from mcp.notifications import (
+from titan_mcp.notifications import (
     MCPNotification,
     NotificationManager,
     NotificationType,

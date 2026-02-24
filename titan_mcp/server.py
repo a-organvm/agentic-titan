@@ -31,14 +31,14 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from mcp.notifications import (
+from titan_mcp.notifications import (
     NotificationType,
     get_notification_manager,
     start_notifications,
     stop_notifications,
 )
-from mcp.prompts import get_all_prompts, get_prompt, get_prompt_messages
-from mcp.resources import format_resource_contents, get_all_resources, read_resource
+from titan_mcp.prompts import get_all_prompts, get_prompt, get_prompt_messages
+from titan_mcp.resources import format_resource_contents, get_all_resources, read_resource
 
 logger = logging.getLogger("titan.mcp")
 
@@ -510,6 +510,13 @@ class TitanMCPServer:
     async def _handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle initialize request."""
         self._initialized = True
+
+        # Load system awareness tools
+        from tools.organvm_bridge import load_organvm_tools
+        try:
+            await load_organvm_tools()
+        except Exception as e:
+            logger.error(f"Failed to load OrganVM tools: {e}")
 
         # Start notification system
         await start_notifications()

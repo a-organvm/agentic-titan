@@ -35,6 +35,14 @@ class RedisConfig(BaseSettings):
     timeout: int = 5
 
 
+class MCPServerConfig(BaseSettings):
+    """Configuration for an upstream MCP server."""
+    name: str
+    command: str
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
 class TitanConfig(BaseSettings):
     """Global configuration for Agentic Titan."""
 
@@ -56,6 +64,9 @@ class TitanConfig(BaseSettings):
     # Infrastructure
     redis: RedisConfig = Field(default_factory=RedisConfig)
     chroma_url: str = "http://localhost:8000"
+    
+    # MCP Integration
+    mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
 
     # Swarm/Topology
     default_topology: str = "swarm"
