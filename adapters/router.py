@@ -44,6 +44,50 @@ class RoutingStrategy(StrEnum):
     SPEED_FIRST = "speed_first"  # Prefer fastest
     ROUND_ROBIN = "round_robin"  # Rotate between providers
     FALLBACK = "fallback"  # Use fallback chain
+    SENSITIVITY = "sensitivity"  # Route based on data classification
+
+
+class DataClassification(StrEnum):
+    """Data sensitivity classification for routing decisions.
+
+    Determines which providers are allowed for a given request:
+    - PUBLIC: Any provider (cloud or local)
+    - INTERNAL: Cloud or local (all providers)
+    - CONFIDENTIAL: Local only (ollama, local GGUF)
+    - REGULATED: Local only with audit logging
+    """
+
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    CONFIDENTIAL = "confidential"
+    REGULATED = "regulated"
+
+
+# Which providers are allowed per classification
+CLASSIFICATION_ALLOWED_PROVIDERS: dict[DataClassification, set[LLMProvider]] = {
+    DataClassification.PUBLIC: {
+        LLMProvider.OLLAMA,
+        LLMProvider.ANTHROPIC,
+        LLMProvider.OPENAI,
+        LLMProvider.GROQ,
+        LLMProvider.LOCAL,
+    },
+    DataClassification.INTERNAL: {
+        LLMProvider.OLLAMA,
+        LLMProvider.ANTHROPIC,
+        LLMProvider.OPENAI,
+        LLMProvider.GROQ,
+        LLMProvider.LOCAL,
+    },
+    DataClassification.CONFIDENTIAL: {
+        LLMProvider.OLLAMA,
+        LLMProvider.LOCAL,
+    },
+    DataClassification.REGULATED: {
+        LLMProvider.OLLAMA,
+        LLMProvider.LOCAL,
+    },
+}
 
 
 @dataclass
@@ -285,24 +329,51 @@ class LLMRouter:
         self,
         requires_tools: bool = False,
         preferred_model: str | None = None,
+        classification: DataClassification | None = None,
     ) -> tuple[LLMProvider, bool]:
         """
         Select the best provider for a request.
+
+        Args:
+            requires_tools: Whether the request needs tool calling support
+            preferred_model: Specific model preference
+            classification: Data sensitivity classification for routing
 
         Returns:
             Tuple of (provider, supports_native_tools)
             If tools are required but no provider supports them,
             returns a provider that can simulate tools via prompts.
         """
+        # Filter providers by classification if specified
+        allowed = None
+        if classification:
+            allowed = CLASSIFICATION_ALLOWED_PROVIDERS.get(classification)
+            if allowed:
+                logger.info(
+                    "Classification=%s allows providers: %s",
+                    classification.value,
+                    [p.value for p in allowed],
+                )
+
+        chain = self._fallback_chain
+        if allowed:
+            chain = [p for p in chain if p in allowed]
+            if not chain:
+                raise LLMAdapterError(
+                    f"No available provider for classification={classification.value}. "
+                    f"Allowed: {[p.value for p in allowed]}. "
+                    f"Available: {[p.value for p in self._fallback_chain]}"
+                )
+
         # First, try to find a provider that supports tools natively
         if requires_tools:
-            for provider in self._fallback_chain:
+            for provider in chain:
                 info = self._providers[provider]
                 if info.supports_tools:
                     return provider, True
 
         # Fall back to any available provider
-        for provider in self._fallback_chain:
+        for provider in chain:
             return provider, self._providers[provider].supports_tools
 
         raise LLMAdapterError("No suitable provider available")
@@ -317,6 +388,7 @@ class LLMRouter:
         max_tokens: int | None = None,
         provider: LLMProvider | None = None,
         model: str | None = None,
+        classification: DataClassification | None = None,
     ) -> LLMResponse:
         """
         Route a completion request.
@@ -329,11 +401,21 @@ class LLMRouter:
             max_tokens: Max output tokens
             provider: Force specific provider
             model: Force specific model
+            classification: Data sensitivity classification for routing
 
         Returns:
             LLM response
         """
         await self._ensure_initialized()
+
+        # Validate explicit provider against classification
+        if provider and classification:
+            allowed = CLASSIFICATION_ALLOWED_PROVIDERS.get(classification, set())
+            if provider not in allowed:
+                raise LLMAdapterError(
+                    f"Provider {provider.value} not allowed for "
+                    f"classification={classification.value}"
+                )
 
         # Select provider
         supports_native_tools = True
@@ -342,7 +424,10 @@ class LLMRouter:
                 raise LLMAdapterError(f"Provider {provider.value} not available")
             supports_native_tools = self._providers[provider].supports_tools
         else:
-            provider, supports_native_tools = self._select_provider(requires_tools=bool(tools))
+            provider, supports_native_tools = self._select_provider(
+                requires_tools=bool(tools),
+                classification=classification,
+            )
 
         # If tools are requested but provider doesn't support them natively,
         # simulate tools via prompt injection
@@ -377,6 +462,16 @@ class LLMRouter:
                 # If using simulated tools, parse tool calls from response
                 if tools and not supports_native_tools:
                     response = self._parse_simulated_tools(response)
+
+                # Audit log for regulated data
+                if classification == DataClassification.REGULATED:
+                    logger.info(
+                        "AUDIT: regulated request completed via %s "
+                        "(model=%s, tokens=%d)",
+                        fallback_provider.value,
+                        response.model,
+                        response.total_tokens,
+                    )
 
                 return response
             except Exception as e:
@@ -467,6 +562,7 @@ If you don't need to use a tool, just respond normally.
         max_tokens: int | None = None,
         provider: LLMProvider | None = None,
         model: str | None = None,
+        classification: DataClassification | None = None,
     ) -> AsyncIterator[str]:
         """
         Route a streaming request.
@@ -479,11 +575,21 @@ If you don't need to use a tool, just respond normally.
             max_tokens: Max output tokens
             provider: Force specific provider
             model: Force specific model
+            classification: Data sensitivity classification for routing
 
         Yields:
             Response tokens
         """
         await self._ensure_initialized()
+
+        # Validate explicit provider against classification
+        if provider and classification:
+            allowed = CLASSIFICATION_ALLOWED_PROVIDERS.get(classification, set())
+            if provider not in allowed:
+                raise LLMAdapterError(
+                    f"Provider {provider.value} not allowed for "
+                    f"classification={classification.value}"
+                )
 
         supports_native_tools = True
         if provider:
@@ -491,7 +597,18 @@ If you don't need to use a tool, just respond normally.
                 raise LLMAdapterError(f"Provider {provider.value} not available")
             supports_native_tools = self._providers[provider].supports_tools
         else:
-            provider, supports_native_tools = self._select_provider(requires_tools=bool(tools))
+            provider, supports_native_tools = self._select_provider(
+                requires_tools=bool(tools),
+                classification=classification,
+            )
+
+        # Audit log for regulated streaming
+        if classification == DataClassification.REGULATED:
+            logger.info(
+                "AUDIT: regulated stream request via %s (model=%s)",
+                provider.value,
+                model or DEFAULT_MODELS.get(provider, "default"),
+            )
 
         # If tools are requested but provider doesn't support them natively,
         # simulate tools via prompt injection

@@ -11,13 +11,16 @@ Provides a unified interface for multiple LLM providers:
 Inspired by: aionui auto-detect and fallback patterns
 """
 
-from adapters.base import LLMAdapter, LLMConfig, LLMResponse
-from adapters.router import LLMRouter, get_router
+from adapters.base import LLMAdapter, LLMConfig, LLMProvider, LLMResponse
+from adapters.router import DataClassification, LLMRouter, RoutingStrategy, get_router
 
 __all__ = [
+    "DataClassification",
     "LLMAdapter",
-    "LLMResponse",
     "LLMConfig",
+    "LLMProvider",
+    "LLMResponse",
     "LLMRouter",
+    "RoutingStrategy",
     "get_router",
 ]

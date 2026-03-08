@@ -302,16 +302,19 @@ class OllamaAdapter(LLMAdapter):
         for msg in messages:
             ollama_messages.append({"role": msg.role, "content": msg.content})
 
+        options: dict[str, Any] = {
+            "temperature": temperature or self.config.temperature,
+            "num_predict": max_tokens or self.config.max_tokens,
+            "num_ctx": self.config.context_window,
+        }
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{self.base_url}/api/chat",
                 json={
                     "model": self.config.model,
                     "messages": ollama_messages,
-                    "options": {
-                        "temperature": temperature or self.config.temperature,
-                        "num_predict": max_tokens or self.config.max_tokens,
-                    },
+                    "options": options,
                     "stream": False,
                 },
                 timeout=self.config.timeout,
@@ -351,6 +354,12 @@ class OllamaAdapter(LLMAdapter):
         for msg in messages:
             ollama_messages.append({"role": msg.role, "content": msg.content})
 
+        options: dict[str, Any] = {
+            "temperature": temperature or self.config.temperature,
+            "num_predict": max_tokens or self.config.max_tokens,
+            "num_ctx": self.config.context_window,
+        }
+
         async with httpx.AsyncClient() as client:
             async with client.stream(
                 "POST",
@@ -358,10 +367,7 @@ class OllamaAdapter(LLMAdapter):
                 json={
                     "model": self.config.model,
                     "messages": ollama_messages,
-                    "options": {
-                        "temperature": temperature or self.config.temperature,
-                        "num_predict": max_tokens or self.config.max_tokens,
-                    },
+                    "options": options,
                     "stream": True,
                 },
                 timeout=self.config.timeout,
