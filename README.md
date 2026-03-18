@@ -568,3 +568,11 @@ See `docs/ci-quality-gates.md` for the complete CI quality gate model and `plans
 ---
 
 *523 files. 3.7M tokens of Python. 18 development phases. 22 agent archetypes. 9 topology patterns. 1,312 tests. Zero lint errors. Zero type errors. Built to orchestrate.*
+
+<!-- SYSTEM-NAV-START -->
+
+---
+
+<sub>[Case Study](https://4444j99.github.io/portfolio/projects/agentic-titan/) · [Portfolio](https://4444j99.github.io/portfolio/) · [System Directory](https://4444j99.github.io/portfolio/directory/) · [ORGAN IV · Taxis](https://organvm-iv-taxis.github.io/) · Part of the <a href="https://4444j99.github.io/portfolio/directory/">ORGANVM eight-organ system</a></sub>
+
+<!-- SYSTEM-NAV-END -->
