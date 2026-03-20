@@ -1,9 +1,35 @@
 schema_version: '1.0'
 repo: agentic-titan
 organ: IV
-display_name: 'Polymorphic Agent Swarm Architecture: model-agnostic, self-organizing
-  multi-agent system with 6 topologies, 1,095+ tests (adversarial, chaos, e2e, integration,
-  performance, MCP, Ray), 18 completed phases.'
+display_name: "Polymorphic Agent Swarm Architecture — model-agnostic, self-organizing multi-agent system with 6 topologies"
+
 delivery:
-- platform: web_app
+- platform: python_library
+  status: in_progress
+  priority: critical
+  notes: "22 archetypes, 9 topologies, 1,095+ tests, 18 completed phases"
+  next_action: "Stabilize topology API and publish v1.0"
+- platform: cli_tool
+  status: in_progress
+  priority: high
+  notes: "CLI for swarm configuration, topology selection, and execution"
+  next_action: "Complete CLI commands for all topology types"
+
+content:
+- platform: docs_site
+  status: planned
+  priority: critical
+  notes: "Architecture reference, topology guides, archetype catalog"
+  next_action: "Document all 6 topologies and 22 archetypes"
+- platform: academic_writing
+  status: planned
+  priority: medium
+  notes: "Paper on polymorphic agent swarm architectures"
+  next_action: "Draft outline with performance benchmark results"
+
+community:
+- platform: discord
   status: not_started
+  priority: low
+  notes: "Multi-agent systems research community"
+  next_action: "Create after public release"
