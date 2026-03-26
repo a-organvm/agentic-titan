@@ -1,93 +1,78 @@
-# Contributing to agentic-titan
+# Contributing to Agentic Titan
 
-Thank you for your interest in contributing to this project.
+Polymorphic multi-agent orchestration framework. Python 3.11+, MIT licensed.
 
-## Overview
-
-Agentic Titan is a Python-based AI agent framework for LLM orchestration. It provides abstractions for building autonomous agents that can coordinate tasks, manage context, and interact with external tools and APIs.
-
-**Stack:** Python (AI agent framework, LLM orchestration)
-
-## Prerequisites
-
-- Git
-- Python 3.11+
-- A GitHub account
-
-## Development Setup
+## Setup
 
 ```bash
-# Clone your fork
 git clone https://github.com/YOUR_USERNAME/agentic-titan.git
 cd agentic-titan
-
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install in development mode
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## How to Contribute
+For optional extras (dashboard, metrics, vector-db, etc.), see `pyproject.toml`.
 
-### Reporting Issues
+## Tests
 
-- Use GitHub Issues for bug reports and feature requests
-- Use the provided issue templates when available
-- Include clear reproduction steps for bugs
-- For documentation issues, specify which file and section
+```bash
+pytest                          # all tests (asyncio_mode = "auto" — no decorator needed)
+pytest tests/integration/       # integration only
+pytest -k "test_topology"       # pattern match
+pytest --cov=. --cov-report=term  # with coverage
+```
 
-### Making Changes
+Async tests run automatically — `asyncio_mode = "auto"` is configured in `pyproject.toml`, so you do not need `@pytest.mark.asyncio`.
 
-1. **Fork** the repository on GitHub
-2. **Clone** your fork locally
-3. **Create a branch** for your change:
-   ```bash
-   git checkout -b feat/your-feature-name
-   ```
-4. **Make your changes** following the code style guidelines below
-5. **Test** your changes:
-   ```bash
-   pytest -v
-   ```
-6. **Commit** with a clear, imperative-mood message:
-   ```bash
-   git commit -m "add validation for edge case in parser"
-   ```
-7. **Push** your branch and open a Pull Request
+## Linting
 
-### Code Style
+```bash
+ruff check .                    # lint (line-length=100, target=py311)
+ruff check . --fix              # auto-fix
+mypy .                          # strict type checking
+```
 
-Follow PEP 8. Use type hints for all function signatures. Prefer dataclasses or Pydantic for data structures. Write docstrings for public APIs. Agent interfaces should be well-documented with usage examples.
+Ruff rules: `["E", "F", "I", "N", "W", "UP"]` — errors, pyflakes, isort, naming, warnings, pyupgrade.
 
-### Commit Messages
+## Package Layout
 
-- Use imperative mood: "add feature" not "added feature"
-- Keep the title under 72 characters
-- Reference issue numbers when applicable: "fix auth bug (#42)"
-- Keep commits atomic and focused on a single change
+Top-level packages (not under `src/`):
 
-## Pull Request Process
+```
+titan/          # CLI entry point (titan.cli:main)
+agents/         # Agent archetypes and definitions
+hive/           # Hive mind — fission/fusion, learning, memory, pheromone fields
+adapters/       # LLM adapters (Ollama, Anthropic, OpenAI, Groq)
+runtime/        # Runtime fabric (local, Docker, OpenFaaS, Firecracker)
+orchestrator/   # Topology engine — 9 coordination patterns
+dashboard/      # FastAPI dashboard
+```
 
-1. Fill out the PR template with a description of your changes
-2. Reference any related issues
-3. Ensure all CI checks pass
-4. Request review from a maintainer
-5. Address review feedback promptly
+Imports resolve from the repo root (`pythonpath = ["."]` in pytest config).
 
-PRs should be focused — one feature or fix per PR. Large changes should be
-discussed in an issue first.
+## Code Style
 
-## Code of Conduct
+- PEP 8, enforced by ruff
+- Type hints on all function signatures
+- Pydantic models for data structures
+- Docstrings on public APIs
+- Line length: 100 characters
 
-Be respectful, constructive, and honest. This project is part of the
-[organvm system](https://github.com/organvm-iv-taxis), which values transparency
-and building in public. We follow the
-[Contributor Covenant](https://www.contributor-covenant.org/).
+## Submitting a PR
 
-## Questions?
+1. Fork and create a branch: `git checkout -b feat/your-feature`
+2. Make changes, add tests
+3. Run `ruff check . && mypy . && pytest` — all three must pass
+4. Commit with imperative mood: `feat: add cooldown to fission-fusion transitions`
+5. Push and open a PR against `main`
+6. Reference the issue number in the PR description
 
-Open an issue on this repository or start a discussion if discussions are
-enabled. For system-wide questions, see
-[orchestration-start-here](https://github.com/organvm-iv-taxis/orchestration-start-here).
+One feature or fix per PR. Large changes should be discussed in an issue first.
+
+## Good First Issues
+
+Issues labeled [`good first issue`](https://github.com/organvm-iv-taxis/agentic-titan/labels/good%20first%20issue) are self-contained tasks with clear scope. Each issue body includes the relevant file paths and a concrete proposal.
+
+## Questions
+
+Open an issue or check [orchestration-start-here](https://github.com/organvm-iv-taxis/orchestration-start-here) for system-wide context.
