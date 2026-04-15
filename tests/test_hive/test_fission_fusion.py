@@ -500,7 +500,103 @@ class TestTransitionCooldown:
         # Backdate the transition time to simulate cooldown expiry
         manager._last_transition_time = manager._last_transition_time - timedelta(seconds=5)
 
-        # Set metrics that trigger fusion
+        # Set metrics that trigger fusion — fill window for majority gate
         manager._metrics.task_correlation = 0.9
+        for _ in range(5):
+            manager._metrics_history.append(
+                FissionFusionMetrics(task_correlation=0.9, crisis_level=0.8)
+            )
         result = await manager.should_transition()
         assert result == FissionFusionState.FUSION
+
+
+class TestWindowedEvaluation:
+    """Tests for windowed metric evaluation (#69)."""
+
+    @pytest.mark.asyncio
+    async def test_single_spike_does_not_trigger_transition(self):
+        """A single high-correlation snapshot shouldn't trigger fusion."""
+        manager = FissionFusionManager()
+
+        # Fill window with low-correlation history (fission territory)
+        for _ in range(4):
+            manager._metrics_history.append(
+                FissionFusionMetrics(task_correlation=0.2)
+            )
+        # One spike
+        manager._metrics_history.append(
+            FissionFusionMetrics(task_correlation=0.9, crisis_level=0.8)
+        )
+        manager._metrics = manager._metrics_history[-1]
+
+        result = await manager.should_transition()
+        assert result is None  # Only 1-of-5 voted fusion
+
+    @pytest.mark.asyncio
+    async def test_majority_triggers_transition(self):
+        """3-of-5 agreeing on fusion triggers the transition."""
+        manager = FissionFusionManager()
+
+        # 2 low, 3 high = majority fusion
+        for tc in [0.2, 0.2, 0.9, 0.9, 0.9]:
+            manager._metrics_history.append(
+                FissionFusionMetrics(task_correlation=tc, crisis_level=0.8 if tc > 0.5 else 0.0)
+            )
+        manager._metrics = manager._metrics_history[-1]
+
+        result = await manager.should_transition()
+        assert result == FissionFusionState.FUSION
+
+    @pytest.mark.asyncio
+    async def test_no_history_allows_immediate_transition(self):
+        """Before enough history accumulates, transitions use single snapshot."""
+        manager = FissionFusionManager()
+        # Only 1 entry — below majority_threshold (3)
+        manager._metrics_history.append(
+            FissionFusionMetrics(task_correlation=0.9, crisis_level=0.8)
+        )
+        manager._metrics = manager._metrics_history[-1]
+
+        result = await manager.should_transition()
+        assert result == FissionFusionState.FUSION
+
+    @pytest.mark.asyncio
+    async def test_window_trims_to_size(self):
+        """History is trimmed to window_size."""
+        manager = FissionFusionManager()
+
+        # Add 10 entries
+        for _ in range(10):
+            manager._metrics_history.append(FissionFusionMetrics())
+
+        # Simulate _evaluate_and_respond trimming
+        if len(manager._metrics_history) > manager._window_size:
+            manager._metrics_history = manager._metrics_history[-manager._window_size:]
+
+        assert len(manager._metrics_history) == 5
+
+    @pytest.mark.asyncio
+    async def test_history_recorded_in_evaluate_and_respond(self):
+        """_evaluate_and_respond adds to metrics history."""
+        manager = FissionFusionManager()
+        assert len(manager._metrics_history) == 0
+
+        await manager._evaluate_and_respond()
+
+        assert len(manager._metrics_history) == 1
+
+    @pytest.mark.asyncio
+    async def test_transition_from_fusion_to_fission_requires_majority(self):
+        """Fusion→fission also requires windowed majority."""
+        manager = FissionFusionManager()
+        manager._state = FissionFusionState.FUSION
+
+        # 2 high, 3 low = majority fission
+        for tc in [0.8, 0.8, 0.1, 0.1, 0.1]:
+            manager._metrics_history.append(
+                FissionFusionMetrics(task_correlation=tc)
+            )
+        manager._metrics = manager._metrics_history[-1]
+
+        result = await manager.should_transition()
+        assert result == FissionFusionState.FISSION

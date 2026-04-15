@@ -225,6 +225,11 @@ class FissionFusionManager:
         self._last_transition_time: datetime | None = None
         self._cooldown_seconds = evaluation_interval * 2  # Default: 2× eval interval
 
+        # Metrics history for windowed evaluation (5-cycle window)
+        self._metrics_history: list[FissionFusionMetrics] = []
+        self._window_size = 5
+        self._majority_threshold = 3  # 3-of-5 must agree for transition
+
         # Manual crisis override (set via set_crisis_level)
         self._manual_crisis_level: float | None = None
 
@@ -280,6 +285,11 @@ class FissionFusionManager:
     async def _evaluate_and_respond(self) -> None:
         """Evaluate state and respond if needed."""
         self._metrics = await self.evaluate_state()
+
+        # Record metrics for windowed evaluation
+        self._metrics_history.append(self._metrics)
+        if len(self._metrics_history) > self._window_size:
+            self._metrics_history = self._metrics_history[-self._window_size :]
 
         suggested = await self.should_transition()
         if suggested and suggested != self._state:
@@ -397,6 +407,11 @@ class FissionFusionManager:
     async def should_transition(self) -> FissionFusionState | None:
         """Determine if state transition should occur.
 
+        Uses a windowed majority gate: the suggested state must be
+        consistent across at least 3 of the last 5 evaluation cycles.
+        This prevents transient metric spikes from triggering premature
+        transitions.
+
         Returns:
             Target state, or None if no transition needed.
         """
@@ -415,6 +430,15 @@ class FissionFusionManager:
         # Apply hysteresis
         if suggested == self._state:
             return None
+
+        # Windowed majority gate: need majority of recent evaluations
+        # to agree on the transition target (3-of-5 default)
+        if len(self._metrics_history) >= self._majority_threshold:
+            window = self._metrics_history[-self._window_size :]
+            votes = [m.suggest_state() for m in window]
+            agree_count = sum(1 for v in votes if v == suggested)
+            if agree_count < self._majority_threshold:
+                return None
 
         # Check thresholds with hysteresis
         if self._state == FissionFusionState.FISSION:
