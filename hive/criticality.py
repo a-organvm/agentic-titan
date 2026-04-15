@@ -61,6 +61,7 @@ class CriticalityMetrics:
     relaxation_time: float = 0.0  # Seconds to equilibrium
     fluctuation_size: float = 0.0  # Variance in order parameter
     order_parameter: float = 0.5  # Measure of system organization (0-1)
+    functional_connectivity: float = 0.5  # Ratio of meaningful to total interactions (0-1)
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
@@ -310,7 +311,8 @@ class CriticalityMonitor:
         susceptibility = await self._measure_susceptibility()
         relaxation_time = await self._measure_relaxation_time()
         fluctuation_size = await self._measure_fluctuation_size()
-        order_parameter = await self._measure_order_parameter()
+        functional_connectivity = await self._measure_functional_connectivity()
+        order_parameter = await self._measure_order_parameter(functional_connectivity)
 
         return CriticalityMetrics(
             correlation_length=correlation_length,
@@ -318,6 +320,7 @@ class CriticalityMonitor:
             relaxation_time=relaxation_time,
             fluctuation_size=fluctuation_size,
             order_parameter=order_parameter,
+            functional_connectivity=functional_connectivity,
         )
 
     async def _measure_correlation_length(self) -> float:
@@ -389,7 +392,36 @@ class CriticalityMonitor:
 
         return min(1.0, statistics.stdev(samples))
 
-    async def _measure_order_parameter(self) -> float:
+    async def _measure_functional_connectivity(self) -> float:
+        """Measure ratio of meaningful interactions to total interactions.
+
+        Functional connectivity separates semantic throughput from structural
+        connectivity. A fully-connected graph (SWARM) can have low functional
+        connectivity if agents cannot comprehend each other's outputs.
+
+        Uses interaction count vs. edge count from the neighborhood network.
+        """
+        if not self._neighborhood:
+            return 0.5  # Default moderate
+
+        stats = self._neighborhood.get_network_stats()
+        total_agents = int(stats.get("total_agents", 0))
+        total_interactions = int(stats.get("total_interactions", 0))
+        total_edges = int(stats.get("total_edges", 0))
+
+        if total_edges == 0 or total_agents < 2:
+            return 0.5
+
+        # Ratio of actual interactions to possible edges
+        # High ratio = agents are meaningfully using their connections
+        # Low ratio = structural connections exist but aren't producing dialogue
+        interaction_ratio = min(1.0, total_interactions / max(1, total_edges))
+
+        return interaction_ratio
+
+    async def _measure_order_parameter(
+        self, functional_connectivity: float | None = None,
+    ) -> float:
         """Measure degree of system organization.
 
         Order parameter ~ 1: highly organized
@@ -411,18 +443,23 @@ class CriticalityMonitor:
         if total_agents < 2:
             return 0.5
 
-        # When density is saturated (all-to-all, e.g. SWARM), structural
-        # metrics are trivially maximal and cannot detect phase transitions.
-        # Use topological neighbor ratio as effective density instead.
+        # Structural order: density + clustering (who CAN talk)
+        # When density is saturated (all-to-all, e.g. SWARM), use topological
+        # neighbor ratio as effective density (Cavagna et al. 2010).
         if density > 0.95 and total_agents > 2:
             neighbor_count = min(
                 int(stats.get("neighbor_count", total_agents - 1)),
                 total_agents - 1,  # Clamp k to feasible neighbors in small swarms
             )
             effective_density = neighbor_count / (total_agents - 1)
-            order = effective_density * 0.5 + avg_clustering * 0.5
+            structural_order = effective_density * 0.5 + avg_clustering * 0.5
         else:
-            order = density * 0.5 + avg_clustering * 0.5
+            structural_order = density * 0.5 + avg_clustering * 0.5
+
+        # Blend structural and functional connectivity
+        # Functional connectivity captures who IS meaningfully communicating
+        func_conn = functional_connectivity if functional_connectivity is not None else 0.5
+        order = structural_order * 0.6 + func_conn * 0.4
 
         # Record for tracking
         self._state_samples.append(order)
@@ -546,6 +583,7 @@ class CriticalityMonitor:
                 "relaxation_time": self._current_metrics.relaxation_time,
                 "fluctuation_size": self._current_metrics.fluctuation_size,
                 "order_parameter": self._current_metrics.order_parameter,
+                "functional_connectivity": self._current_metrics.functional_connectivity,
                 "criticality_score": self._current_metrics.criticality_score,
             },
             "transitions_count": len(self._transitions),

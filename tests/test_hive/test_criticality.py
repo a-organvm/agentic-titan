@@ -149,6 +149,8 @@ class TestCriticalityMonitor:
             "total_agents": 10,
             "average_clustering": 0.5,
             "density": 0.4,
+            "total_edges": 36,
+            "total_interactions": 18,
         }
         neighborhood._profiles = {}
         return neighborhood
@@ -343,13 +345,14 @@ class TestSwarmDensitySaturation:
 
     @pytest.mark.asyncio
     async def test_normal_density_unchanged(self, normal_neighborhood):
-        """Non-saturated density calculation is unchanged."""
+        """Non-saturated density structural calculation is unchanged."""
         monitor = CriticalityMonitor(neighborhood=normal_neighborhood)
-        order = await monitor._measure_order_parameter()
+        # Pass functional_connectivity=0.5 (default) to isolate structural behavior
+        order = await monitor._measure_order_parameter(functional_connectivity=0.5)
 
-        # Normal: density=0.4, clustering=0.5
-        # order = 0.4*0.5 + 0.5*0.5 = 0.45
-        expected = 0.4 * 0.5 + 0.5 * 0.5
+        # structural_order = 0.4*0.5 + 0.5*0.5 = 0.45
+        # order = 0.45*0.6 + 0.5*0.4 = 0.47
+        expected = (0.4 * 0.5 + 0.5 * 0.5) * 0.6 + 0.5 * 0.4
         assert abs(order - expected) < 0.01
 
     @pytest.mark.asyncio
@@ -399,3 +402,124 @@ class TestSwarmDensitySaturation:
         # k clamped to 3, effective_density = 3/3 = 1.0
         # order = 1.0*0.5 + 1.0*0.5 = 1.0 (but never > 1.0)
         assert order <= 1.0
+
+
+class TestFunctionalConnectivity:
+    """Tests for functional_connectivity metric (#66)."""
+
+    def test_field_exists_with_default(self):
+        """CriticalityMetrics has functional_connectivity with sensible default."""
+        m = CriticalityMetrics()
+        assert m.functional_connectivity == 0.5
+
+    def test_field_in_constructor(self):
+        """functional_connectivity can be set at construction."""
+        m = CriticalityMetrics(functional_connectivity=0.8)
+        assert m.functional_connectivity == 0.8
+
+    @pytest.mark.asyncio
+    async def test_measurement_with_interactions(self):
+        """Functional connectivity = interactions / edges."""
+        neighborhood = MagicMock()
+        neighborhood.get_network_stats.return_value = {
+            "total_agents": 10,
+            "total_edges": 40,
+            "total_interactions": 20,
+            "average_clustering": 0.5,
+            "density": 0.4,
+        }
+        neighborhood._profiles = {}
+
+        monitor = CriticalityMonitor(neighborhood=neighborhood)
+        fc = await monitor._measure_functional_connectivity()
+
+        assert fc == 0.5  # 20/40
+
+    @pytest.mark.asyncio
+    async def test_measurement_no_edges(self):
+        """Returns default when no edges exist."""
+        neighborhood = MagicMock()
+        neighborhood.get_network_stats.return_value = {
+            "total_agents": 1,
+            "total_edges": 0,
+            "total_interactions": 0,
+            "average_clustering": 0.0,
+            "density": 0.0,
+        }
+        neighborhood._profiles = {}
+
+        monitor = CriticalityMonitor(neighborhood=neighborhood)
+        fc = await monitor._measure_functional_connectivity()
+
+        assert fc == 0.5
+
+    @pytest.mark.asyncio
+    async def test_measurement_no_neighborhood(self):
+        """Returns default when no neighborhood available."""
+        monitor = CriticalityMonitor()
+        fc = await monitor._measure_functional_connectivity()
+
+        assert fc == 0.5
+
+    @pytest.mark.asyncio
+    async def test_measurement_capped_at_1(self):
+        """Functional connectivity never exceeds 1.0."""
+        neighborhood = MagicMock()
+        neighborhood.get_network_stats.return_value = {
+            "total_agents": 5,
+            "total_edges": 10,
+            "total_interactions": 50,  # More interactions than edges
+            "average_clustering": 0.5,
+            "density": 0.5,
+        }
+        neighborhood._profiles = {}
+
+        monitor = CriticalityMonitor(neighborhood=neighborhood)
+        fc = await monitor._measure_functional_connectivity()
+
+        assert fc == 1.0
+
+    @pytest.mark.asyncio
+    async def test_included_in_sample_state(self):
+        """sample_state() populates functional_connectivity."""
+        neighborhood = MagicMock()
+        neighborhood.get_network_stats.return_value = {
+            "total_agents": 10,
+            "total_edges": 40,
+            "total_interactions": 30,
+            "average_clustering": 0.5,
+            "density": 0.4,
+        }
+        neighborhood._profiles = {}
+
+        monitor = CriticalityMonitor(neighborhood=neighborhood)
+        metrics = await monitor.sample_state()
+
+        assert metrics.functional_connectivity == 0.75  # 30/40
+
+    @pytest.mark.asyncio
+    async def test_order_parameter_blends_functional(self):
+        """Order parameter includes functional_connectivity in calculation."""
+        neighborhood = MagicMock()
+        neighborhood.get_network_stats.return_value = {
+            "total_agents": 10,
+            "total_edges": 36,
+            "total_interactions": 0,  # No meaningful interactions
+            "average_clustering": 0.5,
+            "density": 0.4,
+        }
+        neighborhood._profiles = {}
+
+        monitor = CriticalityMonitor(neighborhood=neighborhood)
+        # Pass zero functional_connectivity explicitly
+        order = await monitor._measure_order_parameter(functional_connectivity=0.0)
+
+        # structural_order = 0.4*0.5 + 0.5*0.5 = 0.45
+        # order = 0.45*0.6 + 0.0*0.4 = 0.27
+        assert order < 0.3  # Pulled down by zero functional connectivity
+
+    def test_serialization_includes_functional(self):
+        """to_dict includes functional_connectivity."""
+        monitor = CriticalityMonitor()
+        data = monitor.to_dict()
+        assert "functional_connectivity" in data["current_metrics"]
