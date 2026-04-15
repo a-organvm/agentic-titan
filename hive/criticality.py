@@ -394,6 +394,11 @@ class CriticalityMonitor:
 
         Order parameter ~ 1: highly organized
         Order parameter ~ 0: disordered
+
+        When structural density is saturated (≈1.0, e.g. SWARM topology),
+        uses topological neighbor ratio (k/N) as effective density instead
+        of raw structural density. This follows Cavagna et al. 2010:
+        functional interactions are topological, not metric.
         """
         if not self._neighborhood:
             return 0.5  # Default balanced
@@ -406,9 +411,15 @@ class CriticalityMonitor:
         if total_agents < 2:
             return 0.5
 
-        # Order parameter based on network organization
-        # High density + high clustering = high order
-        order = density * 0.5 + avg_clustering * 0.5
+        # When density is saturated (all-to-all, e.g. SWARM), structural
+        # metrics are trivially maximal and cannot detect phase transitions.
+        # Use topological neighbor ratio as effective density instead.
+        if density > 0.95 and total_agents > 2:
+            neighbor_count = int(stats.get("neighbor_count", total_agents - 1))
+            effective_density = neighbor_count / (total_agents - 1)
+            order = effective_density * 0.5 + avg_clustering * 0.5
+        else:
+            order = density * 0.5 + avg_clustering * 0.5
 
         # Record for tracking
         self._state_samples.append(order)

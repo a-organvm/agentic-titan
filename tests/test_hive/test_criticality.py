@@ -291,3 +291,92 @@ class TestCriticalityMonitor:
 
         # Should have some metrics history
         assert len(monitor._metrics_history) >= 1
+
+
+class TestSwarmDensitySaturation:
+    """Tests for SWARM topology density saturation fix (#67)."""
+
+    @pytest.fixture
+    def swarm_neighborhood(self):
+        """Mock neighborhood with SWARM-like saturated density."""
+        neighborhood = MagicMock()
+        neighborhood.get_network_stats.return_value = {
+            "total_agents": 20,
+            "average_clustering": 1.0,
+            "density": 1.0,  # SWARM: all-to-all
+            "neighbor_count": 7,  # Topological k=7
+        }
+        neighborhood._profiles = {}
+        return neighborhood
+
+    @pytest.fixture
+    def normal_neighborhood(self):
+        """Mock neighborhood with normal (non-saturated) density."""
+        neighborhood = MagicMock()
+        neighborhood.get_network_stats.return_value = {
+            "total_agents": 20,
+            "average_clustering": 0.5,
+            "density": 0.4,
+            "neighbor_count": 7,
+        }
+        neighborhood._profiles = {}
+        return neighborhood
+
+    @pytest.mark.asyncio
+    async def test_swarm_order_parameter_not_saturated(self, swarm_neighborhood):
+        """SWARM density=1.0 should NOT produce order_parameter=1.0."""
+        monitor = CriticalityMonitor(neighborhood=swarm_neighborhood)
+        order = await monitor._measure_order_parameter()
+
+        # With k=7, N=20: effective_density = 7/19 ≈ 0.368
+        # order = 0.368*0.5 + 1.0*0.5 = 0.684 (not 1.0)
+        assert order < 0.9, f"Order parameter {order} still saturated for SWARM"
+
+    @pytest.mark.asyncio
+    async def test_swarm_can_be_supercritical(self, swarm_neighborhood):
+        """SWARM should be able to reach SUPERCRITICAL state."""
+        monitor = CriticalityMonitor(neighborhood=swarm_neighborhood)
+        order = await monitor._measure_order_parameter()
+
+        # order_parameter < 0.8 means SUBCRITICAL gate does NOT fire
+        assert order < 0.8, "SWARM should not be trapped in SUBCRITICAL"
+
+    @pytest.mark.asyncio
+    async def test_normal_density_unchanged(self, normal_neighborhood):
+        """Non-saturated density calculation is unchanged."""
+        monitor = CriticalityMonitor(neighborhood=normal_neighborhood)
+        order = await monitor._measure_order_parameter()
+
+        # Normal: density=0.4, clustering=0.5
+        # order = 0.4*0.5 + 0.5*0.5 = 0.45
+        expected = 0.4 * 0.5 + 0.5 * 0.5
+        assert abs(order - expected) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_swarm_effective_density_scales_with_k(self):
+        """Effective density scales with topological neighbor count."""
+        neighborhood_k3 = MagicMock()
+        neighborhood_k3.get_network_stats.return_value = {
+            "total_agents": 20,
+            "average_clustering": 1.0,
+            "density": 1.0,
+            "neighbor_count": 3,
+        }
+        neighborhood_k3._profiles = {}
+
+        neighborhood_k15 = MagicMock()
+        neighborhood_k15.get_network_stats.return_value = {
+            "total_agents": 20,
+            "average_clustering": 1.0,
+            "density": 1.0,
+            "neighbor_count": 15,
+        }
+        neighborhood_k15._profiles = {}
+
+        monitor_k3 = CriticalityMonitor(neighborhood=neighborhood_k3)
+        monitor_k15 = CriticalityMonitor(neighborhood=neighborhood_k15)
+
+        order_k3 = await monitor_k3._measure_order_parameter()
+        order_k15 = await monitor_k15._measure_order_parameter()
+
+        assert order_k3 < order_k15, "Higher k should produce higher order parameter"
