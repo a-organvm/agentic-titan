@@ -114,6 +114,8 @@ class EpisodeOutcome:
     error_rate: float  # 0-1
     user_feedback: float | None = None  # -1 to 1 if provided
     notes: str | None = None
+    emergence_detected: bool = False  # Collective output contained novel information
+    emergence_evidence: list[str] = field(default_factory=list)  # Descriptions of emergent content
 
     @property
     def score(self) -> float:
@@ -153,6 +155,8 @@ class EpisodeOutcome:
             "user_feedback": self.user_feedback,
             "notes": self.notes,
             "score": self.score,
+            "emergence_detected": self.emergence_detected,
+            "emergence_evidence": self.emergence_evidence,
         }
 
     @classmethod
@@ -167,6 +171,8 @@ class EpisodeOutcome:
             error_rate=data["error_rate"],
             user_feedback=data.get("user_feedback"),
             notes=data.get("notes"),
+            emergence_detected=data.get("emergence_detected", False),
+            emergence_evidence=data.get("emergence_evidence", []),
         )
 
 
