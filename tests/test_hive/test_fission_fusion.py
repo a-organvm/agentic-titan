@@ -1,9 +1,10 @@
 """Tests for fission-fusion dynamics (Phase 16B)."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
 import pytest
 
+from hive.criticality import CriticalityMetrics, CriticalityMonitor, CriticalityState
 from hive.fission_fusion import (
     Cluster,
     FissionFusionEvent,
@@ -264,6 +265,7 @@ class TestFissionFusionManager:
         """Test setting crisis level."""
         manager.set_crisis_level(0.8)
         assert manager._metrics.crisis_level == 0.8
+        assert manager._manual_crisis_level == 0.8
 
         # Test bounds
         manager.set_crisis_level(1.5)
@@ -271,6 +273,14 @@ class TestFissionFusionManager:
 
         manager.set_crisis_level(-0.5)
         assert manager._metrics.crisis_level == 0.0
+
+    def test_clear_crisis_override(self, manager):
+        """Test clearing manual crisis override."""
+        manager.set_crisis_level(0.8)
+        assert manager._manual_crisis_level == 0.8
+
+        manager.clear_crisis_override()
+        assert manager._manual_crisis_level is None
 
     def test_set_exploration_need(self, manager):
         """Test setting exploration need."""
@@ -325,3 +335,110 @@ class TestFissionFusionManager:
 
         await manager.stop()
         assert manager._running is False
+
+
+class TestCrisisLevelResolution:
+    """Tests for crisis_level signal resolution (#70)."""
+
+    @pytest.mark.asyncio
+    async def test_manual_override_persists_across_evaluate(self):
+        """Manual crisis_level survives evaluate_state() cycles."""
+        manager = FissionFusionManager()
+        manager.set_crisis_level(0.8)
+
+        # Trigger metric computation
+        metrics = await manager.evaluate_state()
+
+        assert metrics.crisis_level == 0.8
+
+    @pytest.mark.asyncio
+    async def test_no_signal_preserves_last_value(self):
+        """Without monitor or manual override, preserves current metrics value."""
+        manager = FissionFusionManager()
+        # Manually set the metrics crisis_level to simulate a previous cycle
+        manager._metrics.crisis_level = 0.4
+
+        metrics = await manager.evaluate_state()
+
+        assert metrics.crisis_level == 0.4
+
+    def test_criticality_monitor_supercritical(self):
+        """Supercritical state drives crisis_level high."""
+        monitor = MagicMock(spec=CriticalityMonitor)
+        type(monitor).current_state = PropertyMock(
+            return_value=CriticalityState.SUPERCRITICAL
+        )
+        # criticality_score is a computed property — mock it on the metrics object
+        mock_metrics = MagicMock()
+        mock_metrics.criticality_score = 0.8
+        type(monitor).current_metrics = PropertyMock(return_value=mock_metrics)
+
+        manager = FissionFusionManager(criticality_monitor=monitor)
+        crisis = manager._resolve_crisis_level()
+
+        # Supercritical: 0.5 + 0.8 * 0.5 = 0.9
+        assert crisis > 0.5
+
+    def test_criticality_monitor_subcritical(self):
+        """Subcritical state drives crisis_level low."""
+        monitor = MagicMock(spec=CriticalityMonitor)
+        type(monitor).current_state = PropertyMock(
+            return_value=CriticalityState.SUBCRITICAL
+        )
+        mock_metrics = MagicMock()
+        mock_metrics.criticality_score = 0.3
+        type(monitor).current_metrics = PropertyMock(return_value=mock_metrics)
+
+        manager = FissionFusionManager(criticality_monitor=monitor)
+        crisis = manager._resolve_crisis_level()
+
+        assert crisis < 0.3
+
+    def test_criticality_monitor_critical_low_baseline(self):
+        """Critical (optimal) state gives low baseline crisis."""
+        monitor = MagicMock(spec=CriticalityMonitor)
+        type(monitor).current_state = PropertyMock(
+            return_value=CriticalityState.CRITICAL
+        )
+        type(monitor).current_metrics = PropertyMock(
+            return_value=CriticalityMetrics()
+        )
+
+        manager = FissionFusionManager(criticality_monitor=monitor)
+        crisis = manager._resolve_crisis_level()
+
+        assert crisis == 0.1
+
+    def test_manual_override_beats_monitor(self):
+        """Manual override takes priority over criticality monitor."""
+        monitor = MagicMock(spec=CriticalityMonitor)
+        type(monitor).current_state = PropertyMock(
+            return_value=CriticalityState.SUPERCRITICAL
+        )
+        mock_metrics = MagicMock()
+        mock_metrics.criticality_score = 0.9
+        type(monitor).current_metrics = PropertyMock(return_value=mock_metrics)
+
+        manager = FissionFusionManager(criticality_monitor=monitor)
+        manager.set_crisis_level(0.2)  # Override: stay calm
+
+        crisis = manager._resolve_crisis_level()
+        assert crisis == 0.2
+
+    def test_clear_override_falls_back_to_monitor(self):
+        """After clearing override, falls back to criticality-derived value."""
+        monitor = MagicMock(spec=CriticalityMonitor)
+        type(monitor).current_state = PropertyMock(
+            return_value=CriticalityState.SUPERCRITICAL
+        )
+        mock_metrics = MagicMock()
+        mock_metrics.criticality_score = 0.8
+        type(monitor).current_metrics = PropertyMock(return_value=mock_metrics)
+
+        manager = FissionFusionManager(criticality_monitor=monitor)
+        manager.set_crisis_level(0.1)
+        assert manager._resolve_crisis_level() == 0.1
+
+        manager.clear_crisis_override()
+        crisis = manager._resolve_crisis_level()
+        assert crisis > 0.5  # Back to supercritical-derived
