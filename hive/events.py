@@ -95,6 +95,9 @@ class EventType(StrEnum):
     FUSION_INITIATED = "fission_fusion.fusion.initiated"
     FUSION_COMPLETED = "fission_fusion.fusion.completed"
 
+    # Conflict detection events (#64)
+    CONFLICT_DETECTED = "stigmergy.conflict.detected"
+
     # War machine events (Phase 16)
     SMOOTH_OPERATION = "machine.smooth"
     NOMADIZE_OPERATION = "machine.nomadize"

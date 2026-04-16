@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 from titan.metrics import get_metrics
 
 if TYPE_CHECKING:
+    from hive.conflict import ConflictDetector
     from hive.criticality import CriticalityMonitor
     from hive.events import EventBus
     from hive.neighborhood import TopologicalNeighborhood
@@ -186,6 +187,7 @@ class FissionFusionManager:
         event_bus: EventBus | None = None,
         evaluation_interval: float = 30.0,
         criticality_monitor: CriticalityMonitor | None = None,
+        conflict_detector: ConflictDetector | None = None,
     ) -> None:
         """Initialize the fission-fusion manager.
 
@@ -196,12 +198,17 @@ class FissionFusionManager:
             evaluation_interval: Seconds between state evaluations.
             criticality_monitor: Optional monitor for deriving crisis_level from
                 criticality state (supercritical → high crisis).
+            conflict_detector: Optional detector that scans the pheromone field
+                for opposing-trace conflicts; raises crisis_level when conflicts
+                are found.
         """
         self._neighborhood = neighborhood
         self._pheromone_field = pheromone_field
         self._event_bus = event_bus
         self._evaluation_interval = evaluation_interval
         self._criticality_monitor = criticality_monitor
+        self._conflict_detector = conflict_detector
+        self._conflict_crisis_level: float = 0.0  # updated by evaluate_state()
 
         self._state = FissionFusionState.FISSION  # Start distributed
         self._metrics = FissionFusionMetrics()
@@ -320,7 +327,24 @@ class FissionFusionManager:
         # Calculate cohesion
         cohesion = await self._calculate_cohesion()
 
+        # Conflict detection: scan pheromone field for opposing-trace pairs.
+        # Updates _conflict_crisis_level before _resolve_crisis_level() reads it.
+        if self._conflict_detector is not None and self._pheromone_field is not None:
+            conflicts = self._conflict_detector.detect(self._pheromone_field._traces)
+            self._conflict_crisis_level = self._conflict_detector.compute_crisis_signal(conflicts)
+            if conflicts and self._event_bus is not None:
+                from hive.events import EventType
+                await self._event_bus.emit(
+                    EventType.CONFLICT_DETECTED,
+                    {
+                        "conflict_count": len(conflicts),
+                        "crisis_contribution": self._conflict_crisis_level,
+                    },
+                    source_id="conflict_detector",
+                )
+
         # Crisis level: manual override > criticality-derived > preserved from last cycle
+        # Conflict crisis acts as absolute floor (see _resolve_crisis_level).
         crisis_level = self._resolve_crisis_level()
         exploration_need = 1.0 - task_correlation  # Inverse of correlation
 
@@ -379,13 +403,15 @@ class FissionFusionManager:
         """Resolve crisis_level from available signal sources.
 
         Priority: manual override > criticality-derived > preserved value.
+        Conflict detector acts as an absolute floor: it can raise the result
+        above any of the above sources, but never lower it.
         """
         # 1. Manual override (set via set_crisis_level)
         if self._manual_crisis_level is not None:
-            return self._manual_crisis_level
+            result = self._manual_crisis_level
 
         # 2. Derive from criticality monitor if available
-        if self._criticality_monitor is not None:
+        elif self._criticality_monitor is not None:
             from hive.criticality import CriticalityState
 
             state = self._criticality_monitor.current_state
@@ -393,16 +419,20 @@ class FissionFusionManager:
 
             if state == CriticalityState.SUPERCRITICAL:
                 # Chaotic system → high crisis → push toward FUSION
-                return min(1.0, 0.5 + metrics.criticality_score * 0.5)
+                result = min(1.0, 0.5 + metrics.criticality_score * 0.5)
             elif state == CriticalityState.SUBCRITICAL:
                 # Rigid system → low crisis
-                return max(0.0, 0.2 * metrics.criticality_score)
+                result = max(0.0, 0.2 * metrics.criticality_score)
             else:
                 # Critical (optimal) → moderate baseline
-                return 0.1
+                result = 0.1
 
         # 3. Preserve current value from last cycle
-        return self._metrics.crisis_level
+        else:
+            result = self._metrics.crisis_level
+
+        # Conflict floor: field conflicts can raise crisis above any other source
+        return min(1.0, max(result, self._conflict_crisis_level))
 
     async def should_transition(self) -> FissionFusionState | None:
         """Determine if state transition should occur.

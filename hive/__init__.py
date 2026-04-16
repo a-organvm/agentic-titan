@@ -16,6 +16,11 @@ from hive.analyzer import (
     TaskAnalyzer,
     analyze_task,
 )
+from hive.conflict import (
+    ConflictDetector,
+    ConflictPair,
+    SEMANTIC_OPPOSITES,
+)
 from hive.assembly import (
     AssemblyEvent,
     AssemblyManager,
@@ -23,6 +28,10 @@ from hive.assembly import (
     DeterritorializationType,
     StabilityMetrics,
     TerritorizationType,
+)
+from hive.emergence import (
+    EmergenceDetector,
+    EmergenceResult,
 )
 from hive.criticality import (
     CriticalityMetrics,
@@ -85,6 +94,7 @@ from hive.topology import (
     MeshTopology,
     PipelineTopology,
     RingTopology,
+    SensingRegion,
     StarTopology,
     SwarmTopology,
     TaskProfile,
@@ -110,6 +120,7 @@ __all__ = [
     "TopologyEngine",
     "TopologyType",
     "TaskProfile",
+    "SensingRegion",
     "AgentNode",
     "BaseTopology",
     "SwarmTopology",
@@ -168,11 +179,18 @@ __all__ = [
     "MachineState",
     "MachineOperation",
     "OperationType",
+    # Emergence Detection
+    "EmergenceDetector",
+    "EmergenceResult",
     # Criticality (Phase 16)
     "CriticalityMonitor",
     "CriticalityState",
     "CriticalityMetrics",
     "PhaseTransition",
+    # Conflict Detection (#64)
+    "ConflictDetector",
+    "ConflictPair",
+    "SEMANTIC_OPPOSITES",
     # Fission-Fusion (Phase 16)
     "FissionFusionManager",
     "FissionFusionState",
