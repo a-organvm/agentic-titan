@@ -1,6 +1,5 @@
-import pytest
-from pathlib import Path
-from titan.learning.local_trainer import LocalTrainer, TrainingConfig, PatternType
+from titan.learning.local_trainer import LocalTrainer, TrainingConfig
+
 
 def test_pattern_extraction_naming(tmp_path):
     code_dir = tmp_path / 'src'
@@ -19,7 +18,7 @@ class MyPascalClass:
 
     trainer = LocalTrainer(config=TrainingConfig(source_dirs=[str(code_dir)]))
     result = trainer.train(code_dir)
-    
+
     profile = result.style_profile
     assert profile.function_case == 'snake_case'
     assert profile.class_case == 'PascalCase'
@@ -37,15 +36,15 @@ def typed_func(x: int, y: str) -> str:
 
     trainer = LocalTrainer(config=TrainingConfig(min_examples=1))
     result = trainer.train(code_dir)
-    
+
     patterns = result.style_profile.patterns
     pattern_names = [p.name for p in patterns]
-    
+
     assert 'list_comprehension' in pattern_names
     assert 'type_annotations' in pattern_names
 
 def test_style_adapter_adaptation():
-    from titan.learning.local_trainer import StyleProfile, StyleAdapter
+    from titan.learning.local_trainer import StyleAdapter, StyleProfile
     profile = StyleProfile(quote_style='single')
     adapter = StyleAdapter(profile)
     code = 'print("hello world")'
@@ -53,7 +52,7 @@ def test_style_adapter_adaptation():
     assert "'hello world'" in adapted
 
 def test_style_adapter_suggestions():
-    from titan.learning.local_trainer import StyleProfile, StyleAdapter
+    from titan.learning.local_trainer import StyleAdapter, StyleProfile
     profile = StyleProfile(function_case='camelCase')
     adapter = StyleAdapter(profile)
     bad_code = 'def snake_case_func(): pass'

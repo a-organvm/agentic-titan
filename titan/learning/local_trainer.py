@@ -13,10 +13,7 @@ Reference: vendor/agents/igor/ local learning patterns
 from __future__ import annotations
 
 import ast
-import hashlib
-import json
 import logging
-import re
 from collections import Counter
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -24,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("titan.learning.local_trainer")
+
 
 class PatternType(StrEnum):
     NAMING = "naming"
@@ -34,6 +32,7 @@ class PatternType(StrEnum):
     DOCSTRING = "docstring"
     ERROR_HANDLING = "error_handling"
     TYPING = "typing"
+
 
 @dataclass
 class CodingPattern:
@@ -56,6 +55,7 @@ class CodingPattern:
             "confidence": self.confidence,
             "language": self.language,
         }
+
 
 @dataclass
 class StyleProfile:
@@ -97,26 +97,31 @@ class StyleProfile:
 
     def to_prompt_context(self) -> str:
         lines = ["# Coding Style Guide", ""]
-        lines.extend([
-            "## Naming Conventions",
-            f"- Variables: {self.variable_case}",
-            f"- Functions: {self.function_case}",
-            f"- Classes: {self.class_case}",
-            f"- Constants: {self.constant_case}",
-            f"- Private members: prefix with '{self.private_prefix}'",
-            ""
-        ])
+        lines.extend(
+            [
+                "## Naming Conventions",
+                f"- Variables: {self.variable_case}",
+                f"- Functions: {self.function_case}",
+                f"- Classes: {self.class_case}",
+                f"- Constants: {self.constant_case}",
+                f"- Private members: prefix with '{self.private_prefix}'",
+                "",
+            ]
+        )
         if self.patterns:
             lines.extend(["## Common Patterns", ""])
             for pattern in self.patterns[:10]:
                 lines.append(f"- {pattern.name}: {pattern.description}")
         return "\n".join(lines)
 
+
 @dataclass
 class TrainingConfig:
     source_dirs: list[str] = field(default_factory=list)
     include_patterns: list[str] = field(default_factory=lambda: ["*.py"])
-    exclude_patterns: list[str] = field(default_factory=lambda: ["*test*", "*__pycache__*", "*.pyc"])
+    exclude_patterns: list[str] = field(
+        default_factory=lambda: ["*test*", "*__pycache__*", "*.pyc"]
+    )
     min_file_size: int = 100
     max_file_size: int = 1_000_000
     min_examples: int = 3
@@ -127,6 +132,7 @@ class TrainingConfig:
 
     def to_dict(self) -> dict[str, Any]:
         return {"min_examples": self.min_examples}
+
 
 @dataclass
 class TrainingResult:
@@ -143,6 +149,7 @@ class TrainingResult:
             "style_profile": self.style_profile.to_dict(),
         }
 
+
 class PatternExtractor:
     def __init__(self) -> None:
         self._naming_stats: Counter[str] = Counter()
@@ -153,7 +160,7 @@ class PatternExtractor:
             content = filepath.read_text(encoding="utf-8")
             tree = ast.parse(content)
             naming = self._extract_naming_patterns(tree, filepath)
-            idioms = self._extract_idiom_patterns(content, filepath)
+            idioms = self._extract_idiom_patterns(tree, filepath)
             file_patterns = naming + idioms
             self._patterns.extend(file_patterns)
             return file_patterns
@@ -171,48 +178,91 @@ class PatternExtractor:
                 self._naming_stats[f"class:{case}"] += 1
         return []
 
-    def _extract_idiom_patterns(self, content: str, filepath: Path) -> list[CodingPattern]:
+    def _extract_idiom_patterns(self, tree: ast.AST, filepath: Path) -> list[CodingPattern]:
         patterns = []
-        list_comp_count = len(re.findall(r"\[.+\s+for\s+.+\s+in\s+.+\]", content))
+        nodes = list(ast.walk(tree))
+        list_comp_count = sum(1 for node in nodes if isinstance(node, ast.ListComp))
         if list_comp_count > 0:
-            patterns.append(CodingPattern(
-                type=PatternType.IDIOM, name="list_comprehension",
-                description="Uses list comprehensions", frequency=list_comp_count,
-                source_files=[str(filepath)]
-            ))
+            patterns.append(
+                CodingPattern(
+                    type=PatternType.IDIOM,
+                    name="list_comprehension",
+                    description="Uses list comprehensions",
+                    frequency=list_comp_count,
+                    source_files=[str(filepath)],
+                )
+            )
+        annotated_functions = [
+            node
+            for node in nodes
+            if isinstance(node, ast.FunctionDef)
+            and (
+                node.returns is not None
+                or any(arg.annotation is not None for arg in node.args.args)
+                or any(arg.annotation is not None for arg in node.args.kwonlyargs)
+            )
+        ]
+        if annotated_functions:
+            patterns.append(
+                CodingPattern(
+                    type=PatternType.TYPING,
+                    name="type_annotations",
+                    description="Uses function type annotations",
+                    frequency=len(annotated_functions),
+                    source_files=[str(filepath)],
+                )
+            )
         return patterns
 
     def _detect_case(self, name: str) -> str:
-        if name.isupper(): return "UPPER_SNAKE_CASE"
-        if "_" in name: return "snake_case"
-        if name[0].isupper(): return "PascalCase"
+        if name.isupper():
+            return "UPPER_SNAKE_CASE"
+        if "_" in name:
+            return "snake_case"
+        if name[0].isupper():
+            return "PascalCase"
         return "snake_case"
 
     def get_style_profile(self, min_frequency: int = 3) -> StyleProfile:
         profile = StyleProfile()
         for prefix in ["function", "class"]:
-            cases = {k.split(":")[1]: v for k, v in self._naming_stats.items() if k.startswith(f"{prefix}:")}
+            cases = {
+                k.split(":")[1]: v
+                for k, v in self._naming_stats.items()
+                if k.startswith(f"{prefix}:")
+            }
             if cases:
-                setattr(profile, f"{prefix}_case", max(cases, key=cases.get))
-        
+                setattr(profile, f"{prefix}_case", max(cases, key=lambda case: cases[case]))
+
         profile.patterns = [p for p in self._patterns if p.frequency >= min_frequency]
         return profile
+
 
 class StyleAdapter:
     def __init__(self, style_profile: StyleProfile) -> None:
         self.style_profile = style_profile
+
     def adapt_code(self, code: str) -> str:
         if self.style_profile.quote_style == "single":
             return code.replace('"', "'")
         return code
+
     def suggest_improvements(self, code: str) -> list[str]:
         suggestions = []
         if "def " in code and self.style_profile.function_case == "camelCase" and "_" in code:
-            suggestions.append(f"Function uses snake_case, but project style is camelCase")
+            suggestions.append("Function uses snake_case, but project style is camelCase")
         return suggestions
 
+    def get_prompt_context(self) -> str:
+        return self.style_profile.to_prompt_context()
+
+
 class LocalTrainer:
-    def __init__(self, config: TrainingConfig | None = None, cache_dir: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        config: TrainingConfig | None = None,
+        cache_dir: str | Path | None = None,
+    ) -> None:
         self.config = config or TrainingConfig()
         self.cache_dir = Path(cache_dir) if cache_dir else None
         self._style_profile: StyleProfile | None = None
@@ -224,30 +274,52 @@ class LocalTrainer:
         source_path = Path(source_path)
         files_analyzed = 0
         for filepath in source_path.rglob("*.py"):
-            if "test" in str(filepath): continue
+            if "test" in filepath.name:
+                continue
             self._extractor.analyze_file(filepath)
             files_analyzed += 1
-        self._style_profile = self._extractor.get_style_profile(min_frequency=self.config.min_examples)
+        self._style_profile = self._extractor.get_style_profile(
+            min_frequency=self.config.min_examples
+        )
         return TrainingResult(
             style_profile=self._style_profile,
             files_analyzed=files_analyzed,
             patterns_found=len(self._style_profile.patterns),
-            training_time_ms=(time.time() - start_time) * 1000
+            training_time_ms=(time.time() - start_time) * 1000,
         )
 
     def get_adapter(self) -> StyleAdapter:
         return StyleAdapter(self._style_profile or StyleProfile())
 
-def extract_patterns(source_path: str | Path, config: TrainingConfig | None = None) -> list[CodingPattern]:
+
+def extract_patterns(
+    source_path: str | Path,
+    config: TrainingConfig | None = None,
+) -> list[CodingPattern]:
     trainer = LocalTrainer(config=config)
     result = trainer.train(source_path)
     return result.style_profile.patterns
 
-def train_on_codebase(source_path: str | Path, config: TrainingConfig | None = None) -> TrainingResult:
+
+def train_on_codebase(
+    source_path: str | Path,
+    config: TrainingConfig | None = None,
+) -> TrainingResult:
     trainer = LocalTrainer(config=config)
     return trainer.train(source_path)
+
 
 def get_style_context(source_path: str | Path) -> str:
     trainer = LocalTrainer()
     trainer.train(source_path)
     return trainer.get_adapter().get_prompt_context()
+
+
+_trainer: LocalTrainer | None = None
+
+
+def get_trainer() -> LocalTrainer:
+    global _trainer
+    if _trainer is None:
+        _trainer = LocalTrainer()
+    return _trainer

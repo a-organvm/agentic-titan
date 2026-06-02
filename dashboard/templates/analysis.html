@@ -269,27 +269,15 @@
         const section = document.getElementById('results-section');
         const content = document.getElementById('results-content');
 
+        clearElement(content);
         if (result.contradictions.length === 0) {
-            content.innerHTML = '<p>No contradictions detected.</p>';
+            const message = document.createElement('p');
+            message.textContent = 'No contradictions detected.';
+            content.appendChild(message);
         } else {
-            content.innerHTML = result.contradictions.map(c => `
-                <div class="contradiction-card ${c.severity}">
-                    <span class="contradiction-type">${c.contradiction_type}</span>
-                    <span class="severity-badge severity-${c.severity}">${c.severity}</span>
-                    <span style="float: right; color: var(--muted-color);">Confidence: ${Math.round(c.confidence * 100)}%</span>
-                    <p style="margin-top: 1rem;">${c.description}</p>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-                        <div>
-                            <strong>Statement A:</strong>
-                            <p style="font-style: italic;">"${c.text_a_excerpt}"</p>
-                        </div>
-                        <div>
-                            <strong>Statement B:</strong>
-                            <p style="font-style: italic;">"${c.text_b_excerpt}"</p>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
+            result.contradictions.forEach((contradiction) => {
+                content.appendChild(createContradictionCard(contradiction));
+            });
         }
 
         section.style.display = 'block';
@@ -299,30 +287,117 @@
         const section = document.getElementById('results-section');
         const content = document.getElementById('results-content');
 
-        let html = `<p>Analyzed ${result.stage_pairs_analyzed} stage pairs.</p>`;
+        clearElement(content);
+        const summary = document.createElement('p');
+        summary.textContent = `Analyzed ${result.stage_pairs_analyzed} stage pairs.`;
+        content.appendChild(summary);
 
         if (result.contradictions.length === 0) {
-            html += '<p>No contradictions found between stages.</p>';
+            const message = document.createElement('p');
+            message.textContent = 'No contradictions found between stages.';
+            content.appendChild(message);
         } else {
-            html += result.contradictions.map((c, i) => `
-                <div class="contradiction-card ${c.severity}">
-                    <strong>${c.stage_a}</strong> vs <strong>${c.stage_b}</strong>
-                    <span class="contradiction-type">${c.type}</span>
-                    <span class="severity-badge severity-${c.severity}">${c.severity}</span>
-                    <p>${c.description}</p>
-                    ${result.dialectic_suggestions[i] ? `
-                        <details>
-                            <summary>Suggested Resolution</summary>
-                            <p>${result.dialectic_suggestions[i].synthesis}</p>
-                            <small>Strategy: ${result.dialectic_suggestions[i].strategy}</small>
-                        </details>
-                    ` : ''}
-                </div>
-            `).join('');
+            result.contradictions.forEach((contradiction, index) => {
+                const card = document.createElement('div');
+                card.className = `contradiction-card ${contradiction.severity}`;
+
+                const stageA = document.createElement('strong');
+                stageA.textContent = contradiction.stage_a;
+                card.appendChild(stageA);
+                card.appendChild(document.createTextNode(' vs '));
+                const stageB = document.createElement('strong');
+                stageB.textContent = contradiction.stage_b;
+                card.appendChild(stageB);
+
+                const type = document.createElement('span');
+                type.className = 'contradiction-type';
+                type.textContent = contradiction.type;
+                card.appendChild(type);
+
+                const severity = document.createElement('span');
+                severity.className = `severity-badge severity-${contradiction.severity}`;
+                severity.textContent = contradiction.severity;
+                card.appendChild(severity);
+
+                const description = document.createElement('p');
+                description.textContent = contradiction.description;
+                card.appendChild(description);
+
+                const suggestion = result.dialectic_suggestions[index];
+                if (suggestion) {
+                    const details = document.createElement('details');
+                    const detailsSummary = document.createElement('summary');
+                    detailsSummary.textContent = 'Suggested Resolution';
+                    const synthesis = document.createElement('p');
+                    synthesis.textContent = suggestion.synthesis;
+                    const strategy = document.createElement('small');
+                    strategy.textContent = `Strategy: ${suggestion.strategy}`;
+                    details.appendChild(detailsSummary);
+                    details.appendChild(synthesis);
+                    details.appendChild(strategy);
+                    card.appendChild(details);
+                }
+
+                content.appendChild(card);
+            });
         }
 
-        content.innerHTML = html;
         section.style.display = 'block';
+    }
+
+    function clearElement(element) {
+        while (element.firstChild) {
+            element.removeChild(element.firstChild);
+        }
+    }
+
+    function createContradictionCard(contradiction) {
+        const card = document.createElement('div');
+        card.className = `contradiction-card ${contradiction.severity}`;
+
+        const type = document.createElement('span');
+        type.className = 'contradiction-type';
+        type.textContent = contradiction.contradiction_type;
+        card.appendChild(type);
+
+        const severity = document.createElement('span');
+        severity.className = `severity-badge severity-${contradiction.severity}`;
+        severity.textContent = contradiction.severity;
+        card.appendChild(severity);
+
+        const confidence = document.createElement('span');
+        confidence.style.float = 'right';
+        confidence.style.color = 'var(--muted-color)';
+        confidence.textContent = `Confidence: ${Math.round(contradiction.confidence * 100)}%`;
+        card.appendChild(confidence);
+
+        const description = document.createElement('p');
+        description.style.marginTop = '1rem';
+        description.textContent = contradiction.description;
+        card.appendChild(description);
+
+        const grid = document.createElement('div');
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = '1fr 1fr';
+        grid.style.gap = '1rem';
+        grid.style.marginTop = '1rem';
+        grid.appendChild(createStatementBlock('Statement A:', contradiction.text_a_excerpt));
+        grid.appendChild(createStatementBlock('Statement B:', contradiction.text_b_excerpt));
+        card.appendChild(grid);
+
+        return card;
+    }
+
+    function createStatementBlock(label, excerpt) {
+        const wrapper = document.createElement('div');
+        const strong = document.createElement('strong');
+        strong.textContent = label;
+        const text = document.createElement('p');
+        text.style.fontStyle = 'italic';
+        text.textContent = `"${excerpt}"`;
+        wrapper.appendChild(strong);
+        wrapper.appendChild(text);
+        return wrapper;
     }
 
     function displaySynthesis(thesis, antithesis, result) {

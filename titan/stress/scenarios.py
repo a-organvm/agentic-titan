@@ -400,4 +400,7 @@ def get_scenario(name: str, **kwargs: Any) -> Scenario:
 
 def list_scenarios() -> list[dict[str, str]]:
     """List available scenarios."""
-    return [{"name": name, "description": cls.description} for name, cls in SCENARIOS.items()]
+    return [
+        {"name": name, "description": cast(Any, cls).description}
+        for name, cls in SCENARIOS.items()
+    ]

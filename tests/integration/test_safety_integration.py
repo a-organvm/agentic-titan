@@ -105,7 +105,7 @@ class TestFilterPipelineIntegration:
     @pytest.mark.asyncio
     async def test_credentials_redacted(self, pipeline):
         """Test that credentials are redacted."""
-        content = "Use this API key: AKIAIOSFODNN7EXAMPLE123456789"
+        content = "Use this API key: AKIAIOSFODNN7EXAMPLE123456789"  # allow-secret
         result = await pipeline.filter(content)
         # Should be sanitized or blocked
         if result.filtered_content:

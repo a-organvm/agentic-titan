@@ -114,18 +114,36 @@ class TestMultiScaleNeighborhood:
         # First call
         neighbors1 = neighborhood.get_neighbors("agent_0", layer=NeighborLayer.PRIMARY)
 
-        # Mark cache as valid
-        neighborhood._cache_valid = True
-
         # Second call should return same cached result
         neighbors2 = neighborhood.get_neighbors("agent_0", layer=NeighborLayer.PRIMARY)
 
         assert neighbors1 == neighbors2
 
+    def test_neighbor_cache_used_until_invalidated(self, neighborhood, monkeypatch):
+        """Cached neighbors are reused and cleared when topology inputs change."""
+        call_count = 0
+        original = neighborhood.calculate_neighbors
+
+        def counting_calculate(agent_id: str) -> list[str]:
+            nonlocal call_count
+            call_count += 1
+            return original(agent_id)
+
+        monkeypatch.setattr(neighborhood, "calculate_neighbors", counting_calculate)
+
+        neighborhood.get_neighbors("agent_0", layer=NeighborLayer.PRIMARY)
+        neighborhood.get_neighbors("agent_0", layer=NeighborLayer.PRIMARY)
+        assert call_count == 1
+
+        neighborhood.record_interaction(
+            "agent_0", "agent_4", InteractionType.COLLABORATION, True,
+        )
+        neighborhood.get_neighbors("agent_0", layer=NeighborLayer.PRIMARY)
+        assert call_count == 2
+
     def test_force_recalculate(self, neighborhood):
         """Test forcing recalculation bypasses cache."""
         neighborhood.get_neighbors("agent_0", layer=NeighborLayer.PRIMARY)
-        neighborhood._cache_valid = True
 
         # Force recalculate
         neighbors2 = neighborhood.get_neighbors(

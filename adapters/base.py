@@ -481,6 +481,8 @@ class AnthropicAdapter(LLMAdapter):
         - 529 OverloadedError       -> LLMOverloadedError (retryable with backoff)
         - Other APIStatusError      -> LLMAdapterError (generic)
         """
+        from importlib import import_module
+
         from anthropic import (
             APIStatusError,
             RateLimitError,
@@ -489,21 +491,18 @@ class AnthropicAdapter(LLMAdapter):
         # These error types exist in the SDK but may not be re-exported from
         # the public __init__.py in all versions.  Try the public path first,
         # then fall back to the private _exceptions module.
-        try:
-            from anthropic import OverloadedError
-        except ImportError:
-            try:
-                from anthropic._exceptions import OverloadedError
-            except ImportError:
-                OverloadedError = None  # type: ignore[assignment, misc]
-
-        try:
-            from anthropic import RequestTooLargeError
-        except ImportError:
-            try:
-                from anthropic._exceptions import RequestTooLargeError
-            except ImportError:
-                RequestTooLargeError = None  # type: ignore[assignment, misc]
+        anthropic_module = import_module("anthropic")
+        anthropic_exceptions_module = import_module("anthropic._exceptions")
+        overloaded_error_type = getattr(
+            anthropic_module,
+            "OverloadedError",
+            getattr(anthropic_exceptions_module, "OverloadedError", None),
+        )
+        request_too_large_error_type = getattr(
+            anthropic_module,
+            "RequestTooLargeError",
+            getattr(anthropic_exceptions_module, "RequestTooLargeError", None),
+        )
 
         from agents.framework.errors import (
             LLMAdapterError,
@@ -515,11 +514,11 @@ class AnthropicAdapter(LLMAdapter):
         provider = "anthropic"
 
         # 413 — request payload too large (non-retryable)
-        if RequestTooLargeError and isinstance(e, RequestTooLargeError):
+        if request_too_large_error_type and isinstance(e, request_too_large_error_type):
             return LLMRequestTooLargeError(provider=provider, detail=str(e))
 
         # 529 — server overloaded (retryable)
-        if OverloadedError and isinstance(e, OverloadedError):
+        if overloaded_error_type and isinstance(e, overloaded_error_type):
             retry_after = None
             if hasattr(e, "response") and e.response is not None:
                 raw = e.response.headers.get("retry-after")

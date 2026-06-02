@@ -306,22 +306,35 @@
         const section = document.getElementById('node-details');
         const content = document.getElementById('node-content');
 
-        content.innerHTML = `
-            <dl>
-                <dt>ID</dt>
-                <dd><code>${node.id}</code></dd>
-                <dt>Label</dt>
-                <dd>${node.label}</dd>
-                <dt>Type</dt>
-                <dd>${node.type}</dd>
-                ${Object.entries(node.properties || {}).map(([k, v]) => `
-                    <dt>${k}</dt>
-                    <dd>${v}</dd>
-                `).join('')}
-            </dl>
-        `;
+        while (content.firstChild) {
+            content.removeChild(content.firstChild);
+        }
+
+        const dl = document.createElement('dl');
+        addDefinition(dl, 'ID', node.id, true);
+        addDefinition(dl, 'Label', node.label);
+        addDefinition(dl, 'Type', node.type);
+        Object.entries(node.properties || {}).forEach(([key, value]) => {
+            addDefinition(dl, key, value);
+        });
+        content.appendChild(dl);
 
         section.style.display = 'block';
+    }
+
+    function addDefinition(dl, term, value, codeValue) {
+        const dt = document.createElement('dt');
+        dt.textContent = term;
+        const dd = document.createElement('dd');
+        if (codeValue) {
+            const code = document.createElement('code');
+            code.textContent = String(value ?? '');
+            dd.appendChild(code);
+        } else {
+            dd.textContent = String(value ?? '');
+        }
+        dl.appendChild(dt);
+        dl.appendChild(dd);
     }
 
     function closeNodeDetails() {
@@ -344,13 +357,31 @@
             const results = await response.json();
 
             document.getElementById('results-count').textContent = `(${results.total_results} found)`;
-            document.getElementById('results-list').innerHTML = results.results.map(r => `
-                <li onclick="highlightNode('${r.key}')">
-                    <span class="result-key">${r.key}</span>
-                    <span class="result-score">${Math.round(r.score * 100)}%</span>
-                    <p class="result-preview">${r.content_preview}</p>
-                </li>
-            `).join('');
+            const resultsList = document.getElementById('results-list');
+            while (resultsList.firstChild) {
+                resultsList.removeChild(resultsList.firstChild);
+            }
+            results.results.forEach((result) => {
+                const item = document.createElement('li');
+                item.addEventListener('click', () => highlightNode(result.key));
+
+                const key = document.createElement('span');
+                key.className = 'result-key';
+                key.textContent = result.key;
+                item.appendChild(key);
+
+                const score = document.createElement('span');
+                score.className = 'result-score';
+                score.textContent = `${Math.round(result.score * 100)}%`;
+                item.appendChild(score);
+
+                const preview = document.createElement('p');
+                preview.className = 'result-preview';
+                preview.textContent = result.content_preview;
+                item.appendChild(preview);
+
+                resultsList.appendChild(item);
+            });
 
             document.getElementById('search-results').style.display = 'block';
         } catch (error) {

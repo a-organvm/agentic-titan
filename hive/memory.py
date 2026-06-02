@@ -23,7 +23,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger("titan.hive.memory")
 
@@ -188,7 +188,8 @@ class HiveMind:
         try:
             import redis.asyncio as redis
 
-            self._redis = redis.from_url(
+            from_url = cast(Any, redis.from_url)
+            self._redis = from_url(
                 self.config.redis_url,
                 db=self.config.redis_db,
                 socket_connect_timeout=self.config.connection_timeout,

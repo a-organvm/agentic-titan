@@ -159,8 +159,12 @@ class TitanDashboard:
         if not self.app:
             return
 
-        def render_template(template_name: str, context: dict[str, Any]) -> HTMLResponse:
-            return cast(HTMLResponse, templates.TemplateResponse(template_name, context))
+        def render_template(
+            request: Request,
+            template_name: str,
+            context: dict[str, Any],
+        ) -> HTMLResponse:
+            return cast(HTMLResponse, templates.TemplateResponse(request, template_name, context))
 
         # ====================================================================
         # HTML Routes
@@ -170,6 +174,7 @@ class TitanDashboard:
         async def index(request: Request) -> HTMLResponse:
             """Dashboard home page."""
             return render_template(
+                request,
                 "index.html",
                 {
                     "request": request,
@@ -183,6 +188,7 @@ class TitanDashboard:
         async def agents_page(request: Request) -> HTMLResponse:
             """Agents management page."""
             return render_template(
+                request,
                 "agents.html",
                 {
                     "request": request,
@@ -195,6 +201,7 @@ class TitanDashboard:
         async def topology_page(request: Request) -> HTMLResponse:
             """Topology visualization page."""
             return render_template(
+                request,
                 "topology.html",
                 {
                     "request": request,
@@ -208,6 +215,7 @@ class TitanDashboard:
         async def models_page(request: Request) -> HTMLResponse:
             """Model cognitive signatures page."""
             return render_template(
+                request,
                 "models.html",
                 {
                     "request": request,
@@ -221,6 +229,7 @@ class TitanDashboard:
             sessions = await self._get_inquiry_sessions()
             stats = self._get_inquiry_stats(sessions)
             return render_template(
+                request,
                 "inquiry.html",
                 {
                     "request": request,
@@ -251,6 +260,7 @@ class TitanDashboard:
             )
 
             return render_template(
+                request,
                 "inquiry_detail.html",
                 {
                     "request": request,
@@ -265,6 +275,7 @@ class TitanDashboard:
         async def analysis_page(request: Request) -> HTMLResponse:
             """Contradiction analysis page."""
             return render_template(
+                request,
                 "analysis.html",
                 {
                     "request": request,
@@ -276,6 +287,7 @@ class TitanDashboard:
         async def knowledge_page(request: Request) -> HTMLResponse:
             """Knowledge graph browser page."""
             return render_template(
+                request,
                 "knowledge.html",
                 {
                     "request": request,
@@ -287,6 +299,7 @@ class TitanDashboard:
         async def lexicon_page(request: Request) -> HTMLResponse:
             """Organizational Body Lexicon visualization page."""
             return render_template(
+                request,
                 "lexicon.html",
                 {
                     "request": request,

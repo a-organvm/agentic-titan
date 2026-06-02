@@ -10,14 +10,12 @@ from __future__ import annotations
 
 import math
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from hive.conflict import SEMANTIC_OPPOSITES, ConflictDetector, ConflictPair
+from hive.conflict import ConflictDetector, ConflictPair
 from hive.fission_fusion import FissionFusionManager, FissionFusionState
 from hive.stigmergy import PheromoneField, PheromoneTrace, TraceType
-
 
 # ---------------------------------------------------------------------------
 # Helpers
