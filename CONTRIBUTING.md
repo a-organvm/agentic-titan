@@ -13,6 +13,8 @@ pip install -e ".[dev]"
 
 For optional extras (dashboard, metrics, vector-db, etc.), see `pyproject.toml`.
 
+For a fuller first-run workflow, see [docs/getting-started.md](docs/getting-started.md).
+
 ## Tests
 
 ```bash

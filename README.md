@@ -23,7 +23,7 @@
 
 > A polymorphic, model-agnostic multi-agent orchestration framework with nine topology patterns, 22 agent archetypes, and production-grade safety infrastructure — from two agents on a laptop to 100+ agents across Firecracker microVMs.
 
-[Problem Statement](#problem-statement) | [Core Architecture](#core-architecture) | [Key Concepts](#key-concepts) | [Installation & Setup](#installation--setup) | [Quick Start](#quick-start) | [Working Examples](#working-examples) | [Testing & Validation](#testing--validation) | [Downstream Implementation](#downstream-implementation) | [Cross-References](#cross-references) | [Contributing](#contributing) | [License & Author](#license--author)
+[Problem Statement](#problem-statement) | [Core Architecture](#core-architecture) | [Key Concepts](#key-concepts) | [Installation & Setup](#installation--setup) | [Quick Start](#quick-start) | [Working Examples](#working-examples) | [Testing & Validation](#testing--validation) | [Getting Started](docs/getting-started.md) | [Downstream Implementation](#downstream-implementation) | [Cross-References](#cross-references) | [Contributing](#contributing) | [License & Author](#license--author)
 
 ---
 
