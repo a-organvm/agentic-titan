@@ -10,7 +10,7 @@ import json
 import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from titan.safety.gates import (
@@ -92,7 +92,8 @@ class HITLHandler:
             try:
                 import redis.asyncio as redis
 
-                self._redis = await redis.from_url(self.config.redis_url)
+                from_url = cast(Any, redis.from_url)
+                self._redis = await from_url(self.config.redis_url)
                 logger.info("HITL connected to Redis for distributed state")
             except Exception as e:
                 logger.warning(f"Failed to connect to Redis: {e}")

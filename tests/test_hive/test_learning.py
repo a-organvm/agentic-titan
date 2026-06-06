@@ -1,6 +1,5 @@
 """Tests for hive episodic learning system."""
 
-import pytest
 
 from hive.learning import EpisodeOutcome
 
@@ -35,7 +34,10 @@ class TestEpisodeOutcome:
     def test_emergence_evidence_list(self):
         """emergence_evidence stores descriptions of novel information."""
         evidence = [
-            "Agents A+B deposited partial route data; collective output contained optimal route neither had",
+            (
+                "Agents A+B deposited partial route data; collective output "
+                "contained optimal route neither had"
+            ),
             "Synthesis produced a classification schema not present in any individual trace",
         ]
         outcome = self._make_outcome(

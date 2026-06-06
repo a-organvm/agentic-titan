@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -388,30 +388,50 @@ class PheromoneField:
         """
         result: list[PheromoneTrace] = []
 
-        # Determine which locations to scan
-        if region.locations is None:
-            # Full-field sensing
+        region_locations = getattr(region, "locations", None)
+        transition_buffer = getattr(region, "transition_buffer", None)
+        invariant_types = getattr(region, "invariant_types", None)
+
+        if region_locations is None or transition_buffer is not None or invariant_types:
             locations_to_scan = list(self._traces.keys())
         else:
             locations_to_scan = [
-                loc for loc in region.locations
+                loc for loc in region_locations
                 if loc in self._traces
             ]
 
         min_intensity = getattr(region, "min_intensity", 0.0)
-        allowed_types = getattr(region, "trace_types", None)
 
         for location in locations_to_scan:
             location_traces = self._traces[location]
             for ttype, traces in location_traces.items():
-                if allowed_types and str(ttype) not in allowed_types:
-                    continue
                 for trace in traces:
-                    if (
-                        not trace.is_expired
-                        and trace.intensity >= min_intensity
-                    ):
+                    if trace.is_expired:
+                        continue
+
+                    extra_type = trace.payload.get("atom_type")
+                    is_invariant = region.is_invariant_type(ttype, extra_type)
+                    if is_invariant:
                         result.append(trace)
+                        continue
+
+                    if not region.allows_trace_type(ttype, extra_type):
+                        continue
+
+                    is_local = region_locations is None or location in region_locations
+                    visible_intensity = trace.intensity
+                    if not is_local:
+                        if transition_buffer is None or transition_buffer <= 0.0:
+                            continue
+                        visible_intensity *= transition_buffer
+
+                    if visible_intensity < min_intensity:
+                        continue
+
+                    if visible_intensity == trace.intensity:
+                        result.append(trace)
+                    else:
+                        result.append(replace(trace, intensity=visible_intensity))
 
         return result
 

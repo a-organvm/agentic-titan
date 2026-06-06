@@ -178,18 +178,10 @@ class TestConvergenceExperiment:
     # --- Basic sweep behavior ---
 
     async def test_deterministic(self):
-        """Same seed produces identical deterministic fields.
-
-        Criticality metrics (correlation_length, order_parameter,
-        criticality_score) may vary slightly between runs because
-        TopologicalNeighborhood uses datetime.now() for interaction
-        recency scoring. We verify exact equality on fields controlled
-        by the seeded RNG and approximate equality on computed metrics.
-        """
+        """Same seed produces identical deterministic fields."""
         r1 = await ConvergenceExperiment(n_range=[8, 16, 24], seed=42).run()
         r2 = await ConvergenceExperiment(n_range=[8, 16, 24], seed=42).run()
         for p1, p2 in zip(r1.sweep_points, r2.sweep_points):
-            # Seeded RNG fields: exact match
             assert p1.agent_count == p2.agent_count
             assert p1.emergence_detected == p2.emergence_detected
             assert p1.novelty_ratio == p2.novelty_ratio
@@ -198,13 +190,8 @@ class TestConvergenceExperiment:
             assert p1.above_threshold == p2.above_threshold
             assert p1.total_interactions == p2.total_interactions
             assert p1.functional_connectivity == p2.functional_connectivity
-            # Computed metrics: approximate match (recency-dependent)
-            assert p1.correlation_length == pytest.approx(
-                p2.correlation_length, abs=0.02,
-            )
-            assert p1.order_parameter == pytest.approx(
-                p2.order_parameter, abs=0.02,
-            )
+            assert p1.correlation_length == p2.correlation_length
+            assert p1.order_parameter == p2.order_parameter
 
     async def test_different_seeds_differ(self):
         """Different seeds produce different vocabulary coverage."""

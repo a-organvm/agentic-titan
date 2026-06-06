@@ -183,21 +183,55 @@
 
     function updateSessionList(sessions) {
         const tbody = document.getElementById('session-list');
-        tbody.innerHTML = sessions.map(s => `
-            <tr data-session-id="${s.id}">
-                <td><code>${s.id.slice(0, 12)}...</code></td>
-                <td>${s.topic.slice(0, 40)}${s.topic.length > 40 ? '...' : ''}</td>
-                <td>${s.workflow_name}</td>
-                <td><span class="status-badge status-${s.status}">${s.status}</span></td>
-                <td>
-                    <progress value="${s.progress}" max="100"></progress>
-                    <small>${Math.round(s.progress)}%</small>
-                </td>
-                <td>
-                    <a href="/inquiry/${s.id}" class="button outline small">View</a>
-                </td>
-            </tr>
-        `).join('');
+        while (tbody.firstChild) {
+            tbody.removeChild(tbody.firstChild);
+        }
+
+        sessions.forEach((session) => {
+            const row = document.createElement('tr');
+            row.dataset.sessionId = session.id;
+
+            const idCell = document.createElement('td');
+            const code = document.createElement('code');
+            code.textContent = `${session.id.slice(0, 12)}...`;
+            idCell.appendChild(code);
+            row.appendChild(idCell);
+
+            const topicCell = document.createElement('td');
+            topicCell.textContent = `${session.topic.slice(0, 40)}${session.topic.length > 40 ? '...' : ''}`;
+            row.appendChild(topicCell);
+
+            const workflowCell = document.createElement('td');
+            workflowCell.textContent = session.workflow_name;
+            row.appendChild(workflowCell);
+
+            const statusCell = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = `status-badge status-${session.status}`;
+            badge.textContent = session.status;
+            statusCell.appendChild(badge);
+            row.appendChild(statusCell);
+
+            const progressCell = document.createElement('td');
+            const progress = document.createElement('progress');
+            progress.value = session.progress;
+            progress.max = 100;
+            const progressLabel = document.createElement('small');
+            progressLabel.textContent = `${Math.round(session.progress)}%`;
+            progressCell.appendChild(progress);
+            progressCell.appendChild(progressLabel);
+            row.appendChild(progressCell);
+
+            const actionsCell = document.createElement('td');
+            const viewLink = document.createElement('a');
+            viewLink.href = `/inquiry/${encodeURIComponent(session.id)}`;
+            viewLink.className = 'button outline small';
+            viewLink.textContent = 'View';
+            actionsCell.appendChild(viewLink);
+            row.appendChild(actionsCell);
+
+            tbody.appendChild(row);
+        });
     }
 
     async function pauseSession(sessionId) {

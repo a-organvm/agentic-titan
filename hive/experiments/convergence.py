@@ -254,6 +254,7 @@ class ConvergenceExperiment:
         # --- Neighborhood (k=7 topological neighbors) ---
         neighborhood = TopologicalNeighborhood(
             neighbor_count=self._neighbor_count,
+            recency_decay=0.0,
         )
 
         # Generate per-agent contributions and register in neighborhood

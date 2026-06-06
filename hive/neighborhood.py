@@ -191,6 +191,11 @@ class TopologicalNeighborhood:
         self._secondary_cache: dict[str, list[str]] = {}
         self._cache_valid = False
 
+    def _invalidate_cache(self) -> None:
+        self._neighbor_cache.clear()
+        self._secondary_cache.clear()
+        self._cache_valid = False
+
     @property
     def neighbor_count(self) -> int:
         """Number of neighbors per agent."""
@@ -218,7 +223,7 @@ class TopologicalNeighborhood:
             metadata=metadata or {},
         )
         self._profiles[agent_id] = profile
-        self._cache_valid = False
+        self._invalidate_cache()
 
         logger.debug(f"Registered agent in neighborhood: {agent_id}")
         return profile
@@ -234,7 +239,7 @@ class TopologicalNeighborhood:
         """
         if agent_id in self._profiles:
             del self._profiles[agent_id]
-            self._cache_valid = False
+            self._invalidate_cache()
             return True
         return False
 
@@ -268,7 +273,7 @@ class TopologicalNeighborhood:
             profile.capabilities = capabilities
 
         profile.last_seen = datetime.now(UTC)
-        self._cache_valid = False
+        self._invalidate_cache()
 
         return profile
 
@@ -309,7 +314,7 @@ class TopologicalNeighborhood:
         if len(self._interactions) > self._max_history:
             self._interactions = self._interactions[-self._max_history :]
 
-        self._cache_valid = False
+        self._invalidate_cache()
 
         logger.debug(
             f"Recorded interaction: {agent_a} <-> {agent_b} "
@@ -340,22 +345,22 @@ class TopologicalNeighborhood:
             List of neighbor agent IDs.
         """
         if layer == NeighborLayer.PRIMARY:
-            if not force_recalculate and self._cache_valid:
-                if agent_id in self._neighbor_cache:
-                    return self._neighbor_cache[agent_id]
+            if not force_recalculate and self._cache_valid and agent_id in self._neighbor_cache:
+                return self._neighbor_cache[agent_id]
 
             neighbors = self.calculate_neighbors(agent_id)
             self._neighbor_cache[agent_id] = neighbors
+            self._cache_valid = True
             return neighbors
 
         elif layer == NeighborLayer.SECONDARY:
-            if not force_recalculate and self._cache_valid:
-                if agent_id in self._secondary_cache:
-                    return self._secondary_cache[agent_id]
+            if not force_recalculate and self._cache_valid and agent_id in self._secondary_cache:
+                return self._secondary_cache[agent_id]
 
             # Secondary layer: more neighbors with weaker connections
             neighbors = self._calculate_secondary_neighbors(agent_id)
             self._secondary_cache[agent_id] = neighbors
+            self._cache_valid = True
             return neighbors
 
         elif layer == NeighborLayer.TERTIARY:

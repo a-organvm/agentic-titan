@@ -33,6 +33,22 @@ class TestSensingRegion:
         region = SensingRegion.full_field(min_intensity=0.5)
         assert region.min_intensity == 0.5
 
+    def test_restricted_with_invariant_types(self):
+        region = SensingRegion.restricted(
+            {"loc-a"},
+            trace_types={"path"},
+            invariant_types={"c:sync"},
+            transition_buffer=0.25,
+        )
+        assert region.allows_trace_type("path")
+        assert not region.allows_trace_type("resource")
+        assert region.is_invariant_type("collaboration", "c:sync")
+
+    def test_transition_buffer_advances(self):
+        region = SensingRegion.restricted({"loc-a"}, transition_buffer=0.5)
+        advanced = region.next_transition_buffer(step=0.3)
+        assert advanced.transition_buffer == pytest.approx(0.8)
+
     def test_frozen(self):
         region = SensingRegion.full_field()
         with pytest.raises(AttributeError):
@@ -169,6 +185,31 @@ class TestFissionFusionSensing:
         assert "a3" in region.locations
         assert "a1" not in region.locations
 
+    def test_transition_buffer_preserves_pre_fusion_boundary(self):
+        topo = FissionFusionTopology()
+        topo.add_agent("a1", "Agent 1", [], cluster_id="alpha")
+        topo.add_agent("a2", "Agent 2", [], cluster_id="alpha")
+        topo.add_agent("b1", "Agent B1", [], cluster_id="beta")
+
+        topo.fusion("beta", "alpha")
+
+        region = topo.get_sensing_region("a1")
+        assert region.locations == frozenset({"a1", "a2"})
+        assert region.transition_buffer == 0.0
+        assert "c:sync" in region.invariant_types
+
+    def test_transition_buffer_clears_after_full_pass(self):
+        topo = FissionFusionTopology(transition_buffer_step=0.6)
+        topo.add_agent("a1", "Agent 1", [], cluster_id="alpha")
+        topo.add_agent("b1", "Agent B1", [], cluster_id="beta")
+        topo.fusion("beta", "alpha")
+
+        assert topo.advance_transition_buffer() == pytest.approx(0.6)
+        assert topo.advance_transition_buffer() is None
+        region = topo.get_sensing_region("a1")
+        assert region.transition_buffer is None
+        assert region.locations == frozenset({"a1", "b1"})
+
 
 class TestStigmergicSensing:
     def test_full_field(self):
@@ -247,3 +288,69 @@ class TestPheromoneFieldFiltered:
         region = SensingRegion.restricted({"loc-z"})
         traces = await field.sense_filtered(region)
         assert traces == []
+
+    @pytest.mark.asyncio
+    async def test_invariant_type_bypasses_location_type_and_intensity(self):
+        field = PheromoneField()
+        await field.deposit("a1", TraceType.PATH, "loc-a", 0.9)
+        invariant = await field.deposit(
+            "b1",
+            TraceType.COLLABORATION,
+            "loc-b",
+            0.1,
+            payload={"atom_type": "c:sync"},
+        )
+
+        region = SensingRegion.restricted(
+            {"loc-a"},
+            min_intensity=0.5,
+            trace_types={"path"},
+            invariant_types={"c:sync"},
+        )
+        traces = await field.sense_filtered(region)
+
+        assert {trace.trace_id for trace in traces} == {"trace_default_1", invariant.trace_id}
+
+    @pytest.mark.asyncio
+    async def test_transition_buffer_attenuates_foreign_non_invariant_traces(self):
+        field = PheromoneField()
+        local = await field.deposit("a1", TraceType.PATH, "loc-a", 0.8)
+        foreign = await field.deposit(
+            "b1",
+            TraceType.RESOURCE,
+            "loc-b",
+            0.8,
+            payload={"atom_type": "o:agree"},
+        )
+        invariant = await field.deposit(
+            "b2",
+            TraceType.COLLABORATION,
+            "loc-b",
+            0.3,
+            payload={"atom_type": "c:sync"},
+        )
+
+        region = SensingRegion.restricted(
+            {"loc-a"},
+            invariant_types={"c:sync"},
+            transition_buffer=0.25,
+        )
+        traces = await field.sense_filtered(region)
+        by_id = {trace.trace_id: trace for trace in traces}
+
+        assert by_id[local.trace_id].intensity == pytest.approx(0.8)
+        assert by_id[foreign.trace_id].intensity == pytest.approx(0.2)
+        assert by_id[invariant.trace_id].intensity == pytest.approx(0.3)
+        assert foreign.intensity == pytest.approx(0.8)
+
+    @pytest.mark.asyncio
+    async def test_zero_transition_buffer_blocks_foreign_non_invariant_traces(self):
+        field = PheromoneField()
+        local = await field.deposit("a1", TraceType.PATH, "loc-a", 0.8)
+        foreign = await field.deposit("b1", TraceType.RESOURCE, "loc-b", 0.8)
+
+        region = SensingRegion.restricted({"loc-a"}, transition_buffer=0.0)
+        traces = await field.sense_filtered(region)
+
+        assert {trace.trace_id for trace in traces} == {local.trace_id}
+        assert foreign.trace_id not in {trace.trace_id for trace in traces}

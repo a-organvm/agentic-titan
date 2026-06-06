@@ -25,7 +25,7 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -174,7 +174,8 @@ async def detailed_health() -> DetailedHealthResponse:
     try:
         import redis
 
-        r = redis.from_url(os.getenv("TITAN_REDIS_URL", "redis://localhost:6379"))
+        from_url = cast(Any, redis.from_url)
+        r = from_url(os.getenv("TITAN_REDIS_URL", "redis://localhost:6379"))
         r.ping()
         components["redis"] = {"status": "healthy", "connected": True}
     except Exception as e:
@@ -245,7 +246,8 @@ async def metrics_summary() -> MetricsSummaryResponse:
     try:
         import redis
 
-        r = redis.from_url(os.getenv("TITAN_REDIS_URL", "redis://localhost:6379"))
+        from_url = cast(Any, redis.from_url)
+        r = from_url(os.getenv("TITAN_REDIS_URL", "redis://localhost:6379"))
         redis_connected = bool(r.ping())
     except Exception:
         pass
@@ -665,7 +667,8 @@ async def flush_cache(
     try:
         import redis
 
-        r = redis.from_url(os.getenv("TITAN_REDIS_URL", "redis://localhost:6379"))
+        from_url = cast(Any, redis.from_url)
+        r = from_url(os.getenv("TITAN_REDIS_URL", "redis://localhost:6379"))
 
         keys_deleted: str | int
         if pattern == "*":
@@ -674,7 +677,7 @@ async def flush_cache(
             keys_deleted = "all"
         else:
             # Pattern-based deletion
-            matched_keys = list(r.keys(pattern))  # type: ignore[arg-type]
+            matched_keys = list(r.keys(pattern))
             if matched_keys:
                 r.delete(*matched_keys)
             keys_deleted = len(matched_keys)

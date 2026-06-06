@@ -17,7 +17,7 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import typer
 from rich.console import Console
@@ -33,6 +33,7 @@ from titan.spec import AgentSpec, get_spec_registry
 
 if TYPE_CHECKING:
     from adapters.router import LLMRouter
+    from agents.framework.base_agent import BaseAgent
 
 # Initialize
 app = typer.Typer(
@@ -97,8 +98,9 @@ async def check_infrastructure() -> dict[str, bool]:
         try:
             import redis.asyncio as redis_lib
 
-            r = redis_lib.from_url("redis://localhost:6379")
-            await r.ping()  # type: ignore[misc]
+            from_url = cast(Any, redis_lib.from_url)
+            r = from_url("redis://localhost:6379")
+            await r.ping()
             checks["redis"] = True
             await r.close()
         except Exception:
@@ -326,6 +328,7 @@ def swarm(
             agent_name = f"{archetype_name}-{i + 1}"
 
             # Create agent with appropriate initialization
+            agent: BaseAgent
             if archetype_class == ResearcherAgent:
                 agent = archetype_class(
                     topic=task,
@@ -431,11 +434,17 @@ def swarm(
 
         for r in results:
             state_style = "green" if r.get("state") == "completed" else "red"
+            duration_ms = r.get("duration_ms")
+            duration_text = (
+                f"{float(duration_ms) / 1000:.1f}s"
+                if isinstance(duration_ms, int | float)
+                else "-"
+            )
             table.add_row(
-                r["agent"],
+                str(r["agent"]),
                 f"[{state_style}]{r.get('state', 'unknown')}[/{state_style}]",
                 str(r.get("turns", "-")),
-                f"{r.get('duration_ms', 0) / 1000:.1f}s" if r.get("duration_ms") else "-",
+                duration_text,
             )
 
         console.print(table)

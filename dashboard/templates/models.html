@@ -277,7 +277,9 @@
             const data = await response.json();
 
             const tbody = document.getElementById('rankings-body');
-            tbody.innerHTML = '';
+            while (tbody.firstChild) {
+                tbody.removeChild(tbody.firstChild);
+            }
 
             data.models.forEach(model => {
                 const row = document.createElement('tr');
@@ -287,9 +289,14 @@
                 row.appendChild(nameCell);
 
                 const strengthsCell = document.createElement('td');
-                strengthsCell.innerHTML = model.top_strengths
-                    .map(s => `<small>${formatDimension(s.task)}: ${s.score}</small>`)
-                    .join('<br>');
+                model.top_strengths.forEach((strength, index) => {
+                    if (index > 0) {
+                        strengthsCell.appendChild(document.createElement('br'));
+                    }
+                    const small = document.createElement('small');
+                    small.textContent = `${formatDimension(strength.task)}: ${strength.score}`;
+                    strengthsCell.appendChild(small);
+                });
                 row.appendChild(strengthsCell);
 
                 const avgCell = document.createElement('td');
@@ -310,7 +317,9 @@
             const data = await response.json();
 
             const tbody = document.getElementById('preferences-body');
-            tbody.innerHTML = '';
+            while (tbody.firstChild) {
+                tbody.removeChild(tbody.firstChild);
+            }
 
             Object.entries(data).forEach(([taskType, prefs]) => {
                 const row = document.createElement('tr');
@@ -320,7 +329,9 @@
                 row.appendChild(taskCell);
 
                 const preferredCell = document.createElement('td');
-                preferredCell.innerHTML = `<strong>${formatModelName(prefs.preferred || 'None')}</strong>`;
+                const preferred = document.createElement('strong');
+                preferred.textContent = formatModelName(prefs.preferred || 'None');
+                preferredCell.appendChild(preferred);
                 row.appendChild(preferredCell);
 
                 const altsCell = document.createElement('td');
@@ -374,35 +385,84 @@
             // Summary
             const summaryDiv = document.getElementById('comparison-summary');
             const winner = data.summary.overall_winner;
-            summaryDiv.innerHTML = `
-                <strong>Result:</strong>
-                ${formatModelName(data.model_a)}: ${data.summary.model_a_wins} wins |
-                ${formatModelName(data.model_b)}: ${data.summary.model_b_wins} wins |
-                Ties: ${data.summary.ties}
-                <br>
-                <strong>Overall Winner:</strong> ${winner === 'tie' ? 'Tie' : formatModelName(winner)}
-            `;
+            while (summaryDiv.firstChild) {
+                summaryDiv.removeChild(summaryDiv.firstChild);
+            }
+            const resultLabel = document.createElement('strong');
+            resultLabel.textContent = 'Result:';
+            summaryDiv.appendChild(resultLabel);
+            summaryDiv.appendChild(document.createTextNode(
+                ` ${formatModelName(data.model_a)}: ${data.summary.model_a_wins} wins | ` +
+                `${formatModelName(data.model_b)}: ${data.summary.model_b_wins} wins | ` +
+                `Ties: ${data.summary.ties}`
+            ));
+            summaryDiv.appendChild(document.createElement('br'));
+            const winnerLabel = document.createElement('strong');
+            winnerLabel.textContent = 'Overall Winner:';
+            summaryDiv.appendChild(winnerLabel);
+            summaryDiv.appendChild(document.createTextNode(
+                ` ${winner === 'tie' ? 'Tie' : formatModelName(winner)}`
+            ));
 
             // Details
             const detailsDiv = document.getElementById('comparison-details');
-            detailsDiv.innerHTML = '<table><thead><tr><th>Dimension</th><th>Comparison</th></tr></thead><tbody>' +
-                data.dimensions.map(d => `
-                    <tr>
-                        <td>${formatDimension(d.dimension)}</td>
-                        <td>
-                            <div class="comparison-bar">
-                                <div class="comparison-bar-a" style="width: ${d.model_a_score * 10}px;"
-                                     title="${formatModelName(data.model_a)}: ${d.model_a_score}"></div>
-                                <span class="${d.winner === data.model_a ? 'winner' : ''}">${d.model_a_score}</span>
-                                <span>vs</span>
-                                <span class="${d.winner === data.model_b ? 'winner' : ''}">${d.model_b_score}</span>
-                                <div class="comparison-bar-b" style="width: ${d.model_b_score * 10}px;"
-                                     title="${formatModelName(data.model_b)}: ${d.model_b_score}"></div>
-                            </div>
-                        </td>
-                    </tr>
-                `).join('') +
-                '</tbody></table>';
+            while (detailsDiv.firstChild) {
+                detailsDiv.removeChild(detailsDiv.firstChild);
+            }
+            const table = document.createElement('table');
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            ['Dimension', 'Comparison'].forEach((label) => {
+                const th = document.createElement('th');
+                th.textContent = label;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            data.dimensions.forEach((dimension) => {
+                const row = document.createElement('tr');
+                const dimCell = document.createElement('td');
+                dimCell.textContent = formatDimension(dimension.dimension);
+                row.appendChild(dimCell);
+
+                const comparisonCell = document.createElement('td');
+                const bar = document.createElement('div');
+                bar.className = 'comparison-bar';
+
+                const barA = document.createElement('div');
+                barA.className = 'comparison-bar-a';
+                barA.style.width = `${dimension.model_a_score * 10}px`;
+                barA.title = `${formatModelName(data.model_a)}: ${dimension.model_a_score}`;
+                bar.appendChild(barA);
+
+                const scoreA = document.createElement('span');
+                scoreA.className = dimension.winner === data.model_a ? 'winner' : '';
+                scoreA.textContent = dimension.model_a_score;
+                bar.appendChild(scoreA);
+
+                const separator = document.createElement('span');
+                separator.textContent = 'vs';
+                bar.appendChild(separator);
+
+                const scoreB = document.createElement('span');
+                scoreB.className = dimension.winner === data.model_b ? 'winner' : '';
+                scoreB.textContent = dimension.model_b_score;
+                bar.appendChild(scoreB);
+
+                const barB = document.createElement('div');
+                barB.className = 'comparison-bar-b';
+                barB.style.width = `${dimension.model_b_score * 10}px`;
+                barB.title = `${formatModelName(data.model_b)}: ${dimension.model_b_score}`;
+                bar.appendChild(barB);
+
+                comparisonCell.appendChild(bar);
+                row.appendChild(comparisonCell);
+                tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+            detailsDiv.appendChild(table);
         } catch (err) {
             console.error('Error comparing models:', err);
         }

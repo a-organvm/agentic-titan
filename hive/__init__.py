@@ -16,11 +16,6 @@ from hive.analyzer import (
     TaskAnalyzer,
     analyze_task,
 )
-from hive.conflict import (
-    ConflictDetector,
-    ConflictPair,
-    SEMANTIC_OPPOSITES,
-)
 from hive.assembly import (
     AssemblyEvent,
     AssemblyManager,
@@ -29,15 +24,20 @@ from hive.assembly import (
     StabilityMetrics,
     TerritorizationType,
 )
-from hive.emergence import (
-    EmergenceDetector,
-    EmergenceResult,
+from hive.conflict import (
+    SEMANTIC_OPPOSITES,
+    ConflictDetector,
+    ConflictPair,
 )
 from hive.criticality import (
     CriticalityMetrics,
     CriticalityMonitor,
     CriticalityState,
     PhaseTransition,
+)
+from hive.emergence import (
+    EmergenceDetector,
+    EmergenceResult,
 )
 from hive.events import (
     Event,

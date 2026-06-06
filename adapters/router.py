@@ -359,8 +359,9 @@ class LLMRouter:
         if allowed:
             chain = [p for p in chain if p in allowed]
             if not chain:
+                classification_value = classification.value if classification else "unknown"
                 raise LLMAdapterError(
-                    f"No available provider for classification={classification.value}. "
+                    f"No available provider for classification={classification_value}. "
                     f"Allowed: {[p.value for p in allowed]}. "
                     f"Available: {[p.value for p in self._fallback_chain]}"
                 )

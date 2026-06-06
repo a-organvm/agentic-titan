@@ -85,23 +85,41 @@ class SensingRegion:
 
     locations: frozenset[str] | None = None  # None = full field
     trace_types: frozenset[str] | None = None  # None = all types
+    invariant_types: frozenset[str] | None = None  # Bypass topology/type gates
     min_intensity: float = 0.0
     max_radius: int | None = None  # Hop-based radius from agent position
+    transition_buffer: float | None = None  # Foreign non-invariant attenuation
 
     @staticmethod
-    def full_field(min_intensity: float = 0.0) -> SensingRegion:
+    def full_field(
+        min_intensity: float = 0.0,
+        *,
+        trace_types: set[str] | None = None,
+        invariant_types: set[str] | None = None,
+    ) -> SensingRegion:
         """Full-field sensing — perceive all locations and types."""
-        return SensingRegion(min_intensity=min_intensity)
+        return SensingRegion(
+            trace_types=_freeze_or_none(trace_types),
+            invariant_types=_freeze_or_none(invariant_types),
+            min_intensity=min_intensity,
+        )
 
     @staticmethod
     def restricted(
         locations: set[str],
         min_intensity: float = 0.0,
+        *,
+        trace_types: set[str] | None = None,
+        invariant_types: set[str] | None = None,
+        transition_buffer: float | None = None,
     ) -> SensingRegion:
         """Restricted sensing — perceive only specific locations."""
         return SensingRegion(
             locations=frozenset(locations),
+            trace_types=_freeze_or_none(trace_types),
+            invariant_types=_freeze_or_none(invariant_types),
             min_intensity=min_intensity,
+            transition_buffer=transition_buffer,
         )
 
     def contains_location(self, location: str) -> bool:
@@ -109,6 +127,43 @@ class SensingRegion:
         if self.locations is None:
             return True
         return location in self.locations
+
+    def is_invariant_type(self, trace_type: object, *extra_keys: object) -> bool:
+        """Check whether a trace type bypasses topology and type filters."""
+        if self.invariant_types is None:
+            return False
+        return bool(self._type_keys(trace_type, *extra_keys) & self.invariant_types)
+
+    def allows_trace_type(self, trace_type: object, *extra_keys: object) -> bool:
+        """Check whether a non-invariant trace type is visible."""
+        if self.trace_types is None:
+            return True
+        return bool(self._type_keys(trace_type, *extra_keys) & self.trace_types)
+
+    def next_transition_buffer(self, step: float = 0.25) -> SensingRegion:
+        """Return a copy with the transition buffer advanced toward full pass-through."""
+        if self.transition_buffer is None:
+            return self
+        return SensingRegion(
+            locations=self.locations,
+            trace_types=self.trace_types,
+            invariant_types=self.invariant_types,
+            min_intensity=self.min_intensity,
+            max_radius=self.max_radius,
+            transition_buffer=min(1.0, self.transition_buffer + step),
+        )
+
+    @staticmethod
+    def _type_keys(trace_type: object, *extra_keys: object) -> frozenset[str]:
+        keys = {str(getattr(trace_type, "value", trace_type))}
+        for key in extra_keys:
+            if key is not None:
+                keys.add(str(getattr(key, "value", key)))
+        return frozenset(keys)
+
+
+def _freeze_or_none(values: set[str] | None) -> frozenset[str] | None:
+    return frozenset(values) if values is not None else None
 
 
 @dataclass
@@ -1115,10 +1170,25 @@ class FissionFusionTopology(BaseTopology):
     """
 
     topology_type = TopologyType.FISSION_FUSION
+    DEFAULT_INVARIANT_TYPES = frozenset(
+        {"collaboration", "c:sync", "c:ack", "c:yield", "c:delegate"}
+    )
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        invariant_types: set[str] | None = None,
+        transition_buffer_step: float = 0.25,
+    ) -> None:
         super().__init__()
         self.clusters: dict[str, list[str]] = {}  # cluster_id -> list of agent_ids
+        self.invariant_types = (
+            frozenset(invariant_types)
+            if invariant_types is not None
+            else self.DEFAULT_INVARIANT_TYPES
+        )
+        self.transition_buffer_step = transition_buffer_step
+        self._transition_buffer: float | None = None
+        self._transition_home_locations: dict[str, frozenset[str]] = {}
 
     def add_agent(
         self,
@@ -1152,6 +1222,7 @@ class FissionFusionTopology(BaseTopology):
 
     def fission(self, cluster_id: str, new_cluster_id: str, agent_ids: list[str]) -> None:
         """Split a group of agents into a new cluster."""
+        self._clear_transition_buffer()
         if cluster_id not in self.clusters:
             return
 
@@ -1174,6 +1245,8 @@ class FissionFusionTopology(BaseTopology):
         if source_cluster_id not in self.clusters:
             return
 
+        source_agents = set(self.clusters[source_cluster_id])
+        target_agents = set(self.clusters.get(target_cluster_id, []))
         agents = self.clusters.pop(source_cluster_id)
         for aid in agents:
             if target_cluster_id not in self.clusters:
@@ -1181,6 +1254,40 @@ class FissionFusionTopology(BaseTopology):
             self.clusters[target_cluster_id].append(aid)
             self.nodes[aid].metadata["cluster_id"] = target_cluster_id
             self._rebuild_neighbors(aid)
+        self._start_transition_buffer(source_agents, target_agents)
+
+    def _start_transition_buffer(
+        self,
+        source_agents: set[str],
+        target_agents: set[str],
+    ) -> None:
+        """Remember pre-fusion sensing boundaries for the merge window."""
+        if not source_agents or not target_agents:
+            self._clear_transition_buffer()
+            return
+
+        self._transition_buffer = 0.0
+        self._transition_home_locations = {
+            agent_id: frozenset(source_agents) for agent_id in source_agents
+        }
+        self._transition_home_locations.update(
+            {agent_id: frozenset(target_agents) for agent_id in target_agents}
+        )
+
+    def advance_transition_buffer(self, step: float | None = None) -> float | None:
+        """Advance merge-window attenuation toward full pass-through."""
+        if self._transition_buffer is None:
+            return None
+        increment = self.transition_buffer_step if step is None else step
+        self._transition_buffer = min(1.0, self._transition_buffer + increment)
+        if self._transition_buffer >= 1.0:
+            self._clear_transition_buffer()
+            return None
+        return self._transition_buffer
+
+    def _clear_transition_buffer(self) -> None:
+        self._transition_buffer = None
+        self._transition_home_locations.clear()
 
     def _rebuild_neighbors(self, agent_id: str) -> None:
         """Update neighbor lists after fission/fusion."""
@@ -1249,11 +1356,17 @@ class FissionFusionTopology(BaseTopology):
         node = self.nodes.get(agent_id)
         if not node:
             return SensingRegion.restricted({agent_id})
+        if self._transition_buffer is not None and agent_id in self._transition_home_locations:
+            return SensingRegion.restricted(
+                set(self._transition_home_locations[agent_id]),
+                invariant_types=set(self.invariant_types),
+                transition_buffer=self._transition_buffer,
+            )
         cluster_id = node.metadata.get("cluster_id", "main")
         members = self.clusters.get(cluster_id, [])
         locations = {agent_id}
         locations.update(members)
-        return SensingRegion.restricted(locations)
+        return SensingRegion.restricted(locations, invariant_types=set(self.invariant_types))
 
 
 class StigmergicTopology(BaseTopology):

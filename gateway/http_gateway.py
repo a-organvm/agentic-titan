@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger("titan.gateway")
 
@@ -57,27 +57,29 @@ class InquiryRequest(BaseModel):
 
 
 class TaskResult(BaseModel):
-    taskId: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    task_id: str = Field(alias="taskId")
     status: str  # "completed" | "failed" | "timeout"
     result: str | None = None
     model: str | None = None
-    agentType: str | None = None
+    agent_type: str | None = Field(default=None, alias="agentType")
 
 
 # ---------------------------------------------------------------------------
 # Lazy MCP tool imports — avoids startup failure if titan_mcp deps missing
 # ---------------------------------------------------------------------------
 
-_mcp_server = None
+_mcp_server: Any | None = None
 
 
-def _get_server():
+def _get_server() -> Any:
     global _mcp_server
     if _mcp_server is None:
         try:
-            from titan_mcp.server import MCPServer
+            from titan_mcp.server import TitanMCPServer
 
-            _mcp_server = MCPServer()
+            _mcp_server = TitanMCPServer()
         except ImportError as e:
             logger.error(f"Cannot import titan_mcp: {e}")
             raise HTTPException(
@@ -87,23 +89,54 @@ def _get_server():
     return _mcp_server
 
 
+async def _call_tool(name: str, arguments: dict[str, Any]) -> Any:
+    from titan_mcp.server import MCPRequest
+
+    response = await _get_server().handle_request(
+        MCPRequest(
+            jsonrpc="2.0",
+            id=str(uuid.uuid4()),
+            method="tools/call",
+            params={"name": name, "arguments": arguments},
+        )
+    )
+    if response.error:
+        raise HTTPException(status_code=500, detail=response.error.get("message", "MCP error"))
+    return response.result
+
+
+async def _read_resource(uri: str) -> Any:
+    from titan_mcp.server import MCPRequest
+
+    response = await _get_server().handle_request(
+        MCPRequest(
+            jsonrpc="2.0",
+            id=str(uuid.uuid4()),
+            method="resources/read",
+            params={"uri": uri},
+        )
+    )
+    if response.error:
+        raise HTTPException(status_code=500, detail=response.error.get("message", "MCP error"))
+    return response.result
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, bool | str]:
     return {"ok": True, "service": "titan-gateway"}
 
 
 @app.post("/api/titan/route-task", response_model=TaskResult)
-async def route_task(req: RouteTaskRequest):
-    server = _get_server()
+async def route_task(req: RouteTaskRequest) -> TaskResult:
     task_id = str(uuid.uuid4())
 
     try:
-        result = await server.handle_tool_call(
+        result = await _call_tool(
             "route_cognitive_task",
             {"task_description": req.query, "context": req.context or ""},
         )
@@ -120,12 +153,11 @@ async def route_task(req: RouteTaskRequest):
 
 
 @app.post("/api/titan/inquiry", response_model=TaskResult)
-async def inquiry(req: InquiryRequest):
-    server = _get_server()
+async def inquiry(req: InquiryRequest) -> TaskResult:
     task_id = str(uuid.uuid4())
 
     try:
-        result = await server.handle_tool_call(
+        result = await _call_tool(
             "start_inquiry",
             {"topic": req.question, "scope": req.scope or "general"},
         )
@@ -140,10 +172,9 @@ async def inquiry(req: InquiryRequest):
 
 
 @app.get("/api/titan/topology")
-async def topology():
-    server = _get_server()
+async def topology() -> dict[str, Any]:
     try:
-        result = await server.handle_resource_read("topology://current")
+        result = await _read_resource("titan://topology/current")
         return {"ok": True, "topology": result}
     except Exception as e:
         logger.exception("topology read failed")
@@ -161,7 +192,7 @@ def _extract_text(result: Any) -> str | None:
     if isinstance(result, dict):
         for key in ("text", "result", "content", "response"):
             if key in result and isinstance(result[key], str):
-                return result[key]
+                return str(result[key])
         # MCP tool results have content array
         contents = result.get("content", [])
         if isinstance(contents, list):

@@ -12,7 +12,7 @@ machine transitions, windowed gates, cooldown enforcement).
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
 import pytest
@@ -20,7 +20,6 @@ import pytest
 from hive.conflict import ConflictDetector
 from hive.criticality import CriticalityMetrics, CriticalityMonitor, CriticalityState
 from hive.fission_fusion import (
-    Cluster,
     FissionFusionManager,
     FissionFusionMetrics,
     FissionFusionState,
@@ -431,7 +430,7 @@ class TestFullEmergenceLoop:
     """Test the complete crisis resolution pipeline with real components."""
 
     async def test_conflict_driven_full_loop(self):
-        """Real opposing traces -> ConflictDetector -> crisis rises -> FUSION -> clear -> FISSION."""
+        """Real opposing traces trigger fusion, then clear and recover to fission."""
         detector = ConflictDetector(intensity_threshold=0.5)
         mgr = _make_manager(conflict_detector=detector)
 
@@ -477,7 +476,7 @@ class TestFullEmergenceLoop:
         assert mgr.state == FissionFusionState.FISSION
 
     async def test_crisis_level_resolution_priority(self):
-        """Verify 3-tier resolution: manual > criticality > preserved, conflict floor always applies."""
+        """Verify crisis priority tiers and the conflict floor."""
         monitor = MagicMock(spec=CriticalityMonitor)
         type(monitor).current_state = PropertyMock(return_value=CriticalityState.SUPERCRITICAL)
         type(monitor).current_metrics = PropertyMock(
