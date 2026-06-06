@@ -14,6 +14,7 @@ Inspired by: kimi-cli mode-switching patterns
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -1345,6 +1346,148 @@ inquiry_app = typer.Typer(
     help="Multi-perspective inquiry commands",
 )
 app.add_typer(inquiry_app, name="inquiry")
+
+
+# ============================================================================
+# Replay Commands
+# ============================================================================
+
+replay_app = typer.Typer(
+    name="replay",
+    help="Capture prompts, replay them across model targets, and diff outputs",
+)
+app.add_typer(replay_app, name="replay")
+
+
+@replay_app.command("capture")
+def replay_capture(
+    prompt: str = typer.Option(..., "--prompt", "-p", help="Prompt to capture"),
+    system: str | None = typer.Option(None, "--system", "-s", help="Optional system prompt"),
+    context: Path | None = typer.Option(
+        None,
+        "--context",
+        "-c",
+        help="Optional context file to append during replay",
+    ),
+    store: Path = typer.Option(
+        Path(".titan/replays"),
+        "--store",
+        help="Replay storage directory",
+    ),
+) -> None:
+    """Capture a prompt for future cross-model replay."""
+    from titan.replay import ReplayStore
+
+    context_text = context.read_text(encoding="utf-8") if context else None
+    replay_store = ReplayStore(store)
+    record = replay_store.capture(prompt=prompt, system=system, context=context_text)
+    console.print(f"[green]Captured replay record[/green] `{record.id}`")
+    console.print(f"Path: {replay_store.record_path(record.id)}")
+
+
+@replay_app.command("run")
+def replay_run(
+    record_id: str = typer.Option(..., "--id", help="Replay record id"),
+    targets: str = typer.Option(
+        ...,
+        "--targets",
+        "-t",
+        help="Comma-separated providers or provider:model targets",
+    ),
+    store: Path = typer.Option(
+        Path(".titan/replays"),
+        "--store",
+        help="Replay storage directory",
+    ),
+    max_tokens: int = typer.Option(1024, "--max-tokens", help="Max output tokens per target"),
+    temperature: float | None = typer.Option(None, "--temperature", help="Sampling temperature"),
+) -> None:
+    """Replay a captured prompt across two or more model targets."""
+    from titan.replay import ReplayError, ReplayStore, dispatch_replay, parse_model_targets
+
+    try:
+        model_targets = parse_model_targets(targets)
+        if len(model_targets) < 2:
+            raise ReplayError("Use at least two targets, for example: anthropic,openai")
+        replay_store = ReplayStore(store)
+        record = replay_store.load_record(record_id)
+    except ReplayError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    async def run_replay() -> None:
+        router = get_router()
+        run = await dispatch_replay(
+            record,
+            model_targets,
+            router,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        replay_store.save_run(run)
+
+        table = Table(title=f"Replay Run {run.id}")
+        table.add_column("Target")
+        table.add_column("Status")
+        table.add_column("Model")
+        table.add_column("Latency")
+        for output in run.outputs:
+            table.add_row(
+                output.target,
+                "error" if output.error else "ok",
+                output.model or "",
+                f"{output.latency_ms:.1f} ms",
+            )
+        console.print(table)
+        console.print(f"Saved: {replay_store.run_path(record.id, run.id)}")
+
+        if all(output.error for output in run.outputs):
+            raise typer.Exit(1)
+
+    asyncio.run(run_replay())
+
+
+@replay_app.command("diff")
+def replay_diff(
+    record_id: str = typer.Option(..., "--id", help="Replay record id"),
+    run_id: str | None = typer.Option(None, "--run-id", help="Replay run id; defaults latest"),
+    store: Path = typer.Option(
+        Path(".titan/replays"),
+        "--store",
+        help="Replay storage directory",
+    ),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Optional report path"),
+    format: str = typer.Option("markdown", "--format", help="Output format: markdown, json"),
+) -> None:
+    """Render a structured diff for a stored replay run."""
+    from titan.replay import ReplayError, ReplayStore, build_diff, render_diff_markdown
+
+    try:
+        replay_store = ReplayStore(store)
+        run = (
+            replay_store.load_run(record_id, run_id)
+            if run_id
+            else replay_store.latest_run(record_id)
+        )
+        diff = build_diff(run)
+    except ReplayError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    if format == "json":
+        rendered = json.dumps(diff, indent=2, sort_keys=True) + "\n"
+    elif format == "markdown":
+        rendered = render_diff_markdown(run, diff)
+    else:
+        console.print("[red]Unknown format. Available: markdown, json[/red]")
+        raise typer.Exit(1)
+
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        console.print(f"Saved: {output}")
+    else:
+        console.print(rendered)
 
 
 @inquiry_app.command("start")

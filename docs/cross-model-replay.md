@@ -2,6 +2,20 @@
 
 > Replay the same prompt across multiple models and diff outputs for consistency, bias detection, and quality comparison.
 
+## Implementation Status
+
+Implemented CLI surface:
+
+```bash
+titan replay capture --prompt "Review this code for security issues"
+titan replay run --id rec_... --targets anthropic:claude-sonnet-4-20250514,openai:gpt-4o
+titan replay diff --id rec_... --format markdown
+```
+
+Replay records and run results are stored as JSON under `.titan/replays/` by
+default. The diff command renders pairwise agreement, length ratio, shared
+terms, target errors, and side-by-side output previews.
+
 ## Use Cases
 
 | Use Case | Description |
