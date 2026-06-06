@@ -1,0 +1,70 @@
+name: AI Quality Gate
+
+on:
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  advisory:
+    name: advisory scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Run advisory AI quality gate
+        run: |
+          python .ci/ai_quality_gate.py --mode advisory --output .ci/ai_quality_gate_report.md
+
+      - name: Upload quality gate report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ai-quality-gate-report
+          path: .ci/ai_quality_gate_report.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upsert PR advisory comment
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- ai-quality-gate-report -->';
+            const path = '.ci/ai_quality_gate_report.md';
+            const body = fs.existsSync(path)
+              ? fs.readFileSync(path, 'utf8')
+              : `${marker}\n## AI Quality Gate Report\n\nReport was not generated.`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
