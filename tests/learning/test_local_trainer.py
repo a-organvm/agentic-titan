@@ -16,7 +16,7 @@ class MyPascalClass:
         self._private_member = 5
 ''')
 
-    trainer = LocalTrainer(config=TrainingConfig(source_dirs=[str(code_dir)]))
+    trainer = LocalTrainer(config=TrainingConfig(source_dirs=[str(code_dir)], min_file_size=0))
     result = trainer.train(code_dir)
 
     profile = result.style_profile
@@ -34,7 +34,7 @@ def typed_func(x: int, y: str) -> str:
     return f'{y}: {x}'
 ''')
 
-    trainer = LocalTrainer(config=TrainingConfig(min_examples=1))
+    trainer = LocalTrainer(config=TrainingConfig(min_examples=1, min_file_size=0))
     result = trainer.train(code_dir)
 
     patterns = result.style_profile.patterns

@@ -169,14 +169,41 @@ class PatternExtractor:
             return []
 
     def _extract_naming_patterns(self, tree: ast.AST, filepath: Path) -> list[CodingPattern]:
+        patterns = []
+        function_cases: Counter[str] = Counter()
+        class_cases: Counter[str] = Counter()
+
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 case = self._detect_case(node.name)
                 self._naming_stats[f"function:{case}"] += 1
+                function_cases[case] += 1
             elif isinstance(node, ast.ClassDef):
                 case = self._detect_case(node.name)
                 self._naming_stats[f"class:{case}"] += 1
-        return []
+                class_cases[case] += 1
+
+        for case, count in function_cases.items():
+            patterns.append(
+                CodingPattern(
+                    type=PatternType.NAMING,
+                    name=f"function_{case}",
+                    description=f"Uses {case} for function names",
+                    frequency=count,
+                    source_files=[str(filepath)],
+                )
+            )
+        for case, count in class_cases.items():
+            patterns.append(
+                CodingPattern(
+                    type=PatternType.NAMING,
+                    name=f"class_{case}",
+                    description=f"Uses {case} for class names",
+                    frequency=count,
+                    source_files=[str(filepath)],
+                )
+            )
+        return patterns
 
     def _extract_idiom_patterns(self, tree: ast.AST, filepath: Path) -> list[CodingPattern]:
         patterns = []
@@ -275,6 +302,12 @@ class LocalTrainer:
         files_analyzed = 0
         for filepath in source_path.rglob("*.py"):
             if "test" in filepath.name:
+                continue
+            try:
+                size = filepath.stat().st_size
+                if size < self.config.min_file_size or size > self.config.max_file_size:
+                    continue
+            except OSError:
                 continue
             self._extractor.analyze_file(filepath)
             files_analyzed += 1
